@@ -293,8 +293,13 @@ class _HudOverlay extends StatelessWidget {
       children: [
         // 이동 입력(조이스틱) — 맨 아래 레이어. 위의 버튼이 우선 히트테스트됨.
         if (!paused) Positioned.fill(child: _GameInputLayer(onInput: onInput)),
+        // 피격 빨강 플래시
+        if (state['hurt'] == true)
+          const Positioned.fill(child: IgnorePointer(child: ColoredBox(color: Color(0x33FF2222)))),
         // HUD 표시(크기/타이머/카운트/목표) — 입력을 막지 않도록 IgnorePointer
         IgnorePointer(child: _readout(stageW)),
+        // 체력 게이지 (좌하단)
+        if (state['hasHp'] == true) Positioned(left: 10, bottom: 16, child: _hpBar()),
         // 오디오/자이로 토글 (우하단)
         Positioned(right: 10, bottom: 14, child: _audioBar()),
         // 일시정지 버튼 (상단 중앙)
@@ -302,6 +307,38 @@ class _HudOverlay extends StatelessWidget {
         // 일시정지 메뉴
         if (paused) Positioned.fill(child: _pauseModal()),
       ],
+    );
+  }
+
+  Widget _hpBar() {
+    final p = ((state['hpPct'] as num?)?.toDouble() ?? 1).clamp(0.0, 1.0);
+    final col = p < 0.3 ? const Color(0xFFFF3B3B) : p < 0.6 ? const Color(0xFFFFB13A) : const Color(0xFF4AD06A);
+    return SizedBox(
+      width: 168,
+      child: Row(
+        children: [
+          const Text('❤️', style: TextStyle(fontSize: 15)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Container(
+              height: 13,
+              decoration: BoxDecoration(
+                color: const Color(0x55000000),
+                border: Border.all(color: Colors.white, width: 2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FractionallySizedBox(
+                  widthFactor: p == 0 ? 0.001 : p,
+                  child: DecoratedBox(decoration: BoxDecoration(color: col)),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

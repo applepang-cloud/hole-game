@@ -54,6 +54,10 @@
   .goalbar > span{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     font-size:9px; font-weight:800; color:#3c5a18; text-shadow:0 1px 0 #fff; }
 
+  .hpwrap{ position:absolute; left:10px; bottom:16px; display:flex; align-items:center; gap:6px; width:168px; z-index:5; }
+  .hpwrap .hpico{ font-size:15px; filter:drop-shadow(0 1px 1px #0006); }
+  .hpbar{ flex:1; height:13px; background:#00000055; border:2px solid #fff; border-radius:10px; overflow:hidden; box-shadow:0 2px 0 #0003; }
+  .hpbar > i{ display:block; height:100%; width:100%; background:#4ad06a; transition:width .2s ease, background .2s; }
   #pauseBtn{ position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:6;
     width:42px; height:42px; border-radius:50%; border:3px solid #fff; background:var(--cream);
     box-shadow:0 4px 0 #d8c39a; font-size:17px; cursor:pointer; color:var(--ink); pointer-events:auto; }
@@ -133,6 +137,10 @@
       </div>
       <div class="goalwrap">
         <div class="goalbar"><i id="goalFill"></i><span id="goalTxt">목표까지</span></div>
+      </div>
+      <div class="hpwrap" id="hpWrap" style="display:none">
+        <span class="hpico">❤️</span>
+        <div class="hpbar"><i id="hpFill"></i></div>
       </div>
     </div>
 
@@ -781,7 +789,8 @@ function populate(){
 /* ===================== 맵(테마 레벨) 시스템 ===================== */
 let MAP=0, MAP_BOUND=GROUND-2, mapGroup=null, windowGhost=null, ambT=0, ballSink=null, holeTotal=0;
 let monsters=[], splats=[], spawners=[];
-const MONSTER_CAP=34, FLATTEN_RATIO=0.8;
+let chopper=null, chopperT=0, attackTimer=0, bombs=[], hurtT=0;
+const MONSTER_CAP=34, FLATTEN_RATIO=0.8, AIR_ATTACK_EVERY=30;   // 공중 공격 주기(초)
 
 /* --- 몬스터/사람 빌더 (size=충돌 반지름) --- */
 function buildAnt(){ const g=new THREE.Group(); const c=0x3a2418;
@@ -921,15 +930,22 @@ function spawnMonster(kind,x,z,fromHole){
   if(monsters.length>=MONSTER_CAP) return null;
   const grp=(MONSTER_BUILD[kind]||buildAnt)(); const size=grp.userData.size; const baseY=grp.userData.y||0;
   grp.position.set(x, fromHole? -size*1.8 : baseY, z); grp.rotation.y=Math.random()*Math.PI*2; scene.add(grp);
-  const m={ grp, x, z, size, kind, baseY, dir:Math.random()*Math.PI*2, speed:rand(1.2,2.6), turn:rand(0.6,1.6), bob:Math.random()*6.28, climb: fromHole?1:0 };
+  const m={ grp, x, z, size, kind, baseY, dir:Math.random()*Math.PI*2, speed:rand(1.2,2.6), turn:rand(0.6,1.6), bob:Math.random()*6.28, climb: fromHole?1:0, atkCd:rand(0.5,1.5) };
   monsters.push(m); return m;
 }
+const AGGRO=9;   // 이 거리 안이면 플레이어를 향해 다가옴
+function monDmg(kind){ return kind==='reaper'?14: kind==='zombie'?10: kind==='goblin'?9: kind==='cat'?7: kind==='person'?5:6; }
 function updateMonsters(dt){
   const bound=MAP_BOUND-0.5;
   for(let i=monsters.length-1;i>=0;i--){ const m=monsters[i];
     if(m.climb>0) m.climb=Math.max(0,m.climb-dt/0.6);
-    m.dir += (Math.random()-0.5)*m.turn*dt;
-    let nx=m.x+Math.sin(m.dir)*m.speed*dt, nz=m.z+Math.cos(m.dir)*m.speed*dt;
+    if(m.atkCd>0) m.atkCd-=dt;
+    const toB=Math.hypot(ball.x-m.x, ball.z-m.z);
+    if(toB<AGGRO && m.climb<=0){ // 추격
+      m.dir = Math.atan2(ball.x-m.x, ball.z-m.z) + (Math.random()-0.5)*0.4;
+    } else { m.dir += (Math.random()-0.5)*m.turn*dt; }
+    const sp = m.speed*(toB<AGGRO?1.35:1);
+    let nx=m.x+Math.sin(m.dir)*sp*dt, nz=m.z+Math.cos(m.dir)*sp*dt;
     if(nx<-bound||nx>bound){ m.dir=-m.dir; nx=clamp(nx,-bound,bound); }
     if(nz<-bound||nz>bound){ m.dir=Math.PI-m.dir; nz=clamp(nz,-bound,bound); }
     m.x=nx; m.z=nz; m.bob+=dt*9;
@@ -937,9 +953,9 @@ function updateMonsters(dt){
     const climbY=(m.climb>0)? -m.size*1.8*m.climb : 0;
     m.grp.position.set(nx, m.baseY+floatY+climbY, nz); m.grp.rotation.y=m.dir;
     const d=Math.hypot(m.x-ball.x,m.z-ball.z), reach=ball.r+m.size*0.7+0.05;
-    if(d<reach && m.climb<=0){
-      if(ball.r>=m.size*FLATTEN_RATIO){ monsters.splice(i,1); squash(m.grp,m.x,m.z,m.size,0.5); }
-      else { const ux=(ball.x-m.x)/(d||1),uz=(ball.z-m.z)/(d||1); ball.x=m.x+ux*reach; ball.z=m.z+uz*reach; }
+    if(m.climb<=0){
+      if(d<reach && ball.r>=m.size*FLATTEN_RATIO){ monsters.splice(i,1); squash(m.grp,m.x,m.z,m.size,0.5); continue; } // 깔아뭉갬
+      if(d<reach+0.6 && m.atkCd<=0){ damage(monDmg(m.kind), m.x, m.z); m.atkCd=1.5; } // 공격
     }
   }
 }
@@ -1072,6 +1088,15 @@ function buildMapWorld(id){
     const wallMat=new THREE.MeshPhongMaterial({color:cfg.wall,shininess:3}); const WALL_H=cfg.wallH, T=0.8;
     for(const [x,z,w,d] of [[0,-H,H*2,T],[0,H,H*2,T],[-H,0,T,H*2],[H,0,T,H*2]]){
       const wall=new THREE.Mesh(new THREE.BoxGeometry(w,WALL_H,d),wallMat); wall.position.set(x,WALL_H/2,z); mapGroup.add(wall); }
+    if(id===3){ // 마트 바닥: 통로 레인 + 노란 점선 + 서있는 안내판
+      for(const lx of [-H*0.55,0,H*0.55]){ const lane=new THREE.Mesh(new THREE.PlaneGeometry(3.0,H*2-2),new THREE.MeshBasicMaterial({color:0xf4f7fa})); lane.rotation.x=-Math.PI/2; lane.position.set(lx,0.012,0); mapGroup.add(lane); }
+      for(let z=-H+2;z<H;z+=2.6){ const d=new THREE.Mesh(new THREE.PlaneGeometry(0.35,1.1),new THREE.MeshBasicMaterial({color:0xf5c84a})); d.rotation.x=-Math.PI/2; d.position.set(0,0.014,z); mapGroup.add(d); }
+      for(const s of [[-H*0.55,-H+3,0x2e7d4f],[H*0.55,-H+3,0xc6604a],[0,H-3,0x4a86c6]]){
+        const post=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,1.4,6),MAT(0x9aa0a6)); post.position.set(s[0],0.7,s[1]); mapGroup.add(post);
+        const board=new THREE.Mesh(new THREE.BoxGeometry(1.1,0.5,0.08),MAT(s[2])); board.position.set(s[0],1.55,s[1]); mapGroup.add(board);
+        const arrow=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.34,3),MAT(0xffffff)); arrow.rotation.z=-Math.PI/2; arrow.position.set(s[0]+0.42,1.55,s[1]+0.05); mapGroup.add(arrow);
+      }
+    }
     if(id===1){
       const win=new THREE.Mesh(new THREE.PlaneGeometry(5,3.2),new THREE.MeshBasicMaterial({color:0x10131c})); win.position.set(0,3.4,-H+0.45); mapGroup.add(win);
       const frame=new THREE.Mesh(new THREE.PlaneGeometry(5.4,3.6),new THREE.MeshBasicMaterial({color:0xffffff})); frame.position.set(0,3.4,-H+0.44); mapGroup.add(frame);
@@ -1080,7 +1105,19 @@ function buildMapWorld(id){
   } else {
     const dome=new THREE.Mesh(new THREE.SphereGeometry(H+60,18,12),new THREE.MeshBasicMaterial({color:cfg.sky||0xa9def7,side:THREE.BackSide,fog:false})); mapGroup.add(dome);
     const ground=new THREE.Mesh(new THREE.CircleGeometry(H+30,44),MAT(cfg.ground||0x83cf4e,false)); ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; mapGroup.add(ground);
-    const road=new THREE.Mesh(new THREE.PlaneGeometry(H*2.2,8),MAT(cfg.road||0xcaba8e,false)); road.rotation.x=-Math.PI/2; road.position.set(0,0.02,0); mapGroup.add(road);
+    if(id===5){ // 도시 바닥: 십자 아스팔트 도로 + 인도 + 중앙선 + 횡단보도
+      const RW=9, asph=0x3b3e44, swc=0xb8bcc4;
+      const r1=new THREE.Mesh(new THREE.PlaneGeometry(H*2.4,RW),MAT(asph,false)); r1.rotation.x=-Math.PI/2; r1.position.set(0,0.02,0); mapGroup.add(r1);
+      const r2=new THREE.Mesh(new THREE.PlaneGeometry(RW,H*2.4),MAT(asph,false)); r2.rotation.x=-Math.PI/2; r2.position.set(0,0.021,0); mapGroup.add(r2);
+      for(const z of [-RW/2-1.4,RW/2+1.4]){ const sw=new THREE.Mesh(new THREE.PlaneGeometry(H*2.4,2.4),MAT(swc,false)); sw.rotation.x=-Math.PI/2; sw.position.set(0,0.016,z); mapGroup.add(sw); }
+      for(const x of [-RW/2-1.4,RW/2+1.4]){ const sw=new THREE.Mesh(new THREE.PlaneGeometry(2.4,H*2.4),MAT(swc,false)); sw.rotation.x=-Math.PI/2; sw.position.set(x,0.017,0); mapGroup.add(sw); }
+      for(let x=-H;x<H;x+=2.4){ const d=new THREE.Mesh(new THREE.PlaneGeometry(1.2,0.25),new THREE.MeshBasicMaterial({color:0xf5c84a})); d.rotation.x=-Math.PI/2; d.position.set(x,0.03,0); mapGroup.add(d); }
+      for(let z=-H;z<H;z+=2.4){ const d=new THREE.Mesh(new THREE.PlaneGeometry(0.25,1.2),new THREE.MeshBasicMaterial({color:0xf5c84a})); d.rotation.x=-Math.PI/2; d.position.set(0,0.031,z); mapGroup.add(d); }
+      const cw=(cx,cz,horiz)=>{ for(let k=-2;k<=2;k++){ const bar=new THREE.Mesh(new THREE.PlaneGeometry(horiz?0.5:3,horiz?3:0.5),new THREE.MeshBasicMaterial({color:0xf2f4f7})); bar.rotation.x=-Math.PI/2; bar.position.set(cx+(horiz?k*0.8:0),0.035,cz+(horiz?0:k*0.8)); mapGroup.add(bar); } };
+      cw(0,-RW/2-1.6,false); cw(0,RW/2+1.6,false); cw(-RW/2-1.6,0,true); cw(RW/2+1.6,0,true);
+    } else {
+      const road=new THREE.Mesh(new THREE.PlaneGeometry(H*2.2,8),MAT(cfg.road||0xcaba8e,false)); road.rotation.x=-Math.PI/2; road.position.set(0,0.02,0); mapGroup.add(road);
+    }
     if(id===6){ // 저승: 도깨비불 + 으스스 안개 느낌 둥근 달
       const moon=new THREE.Mesh(new THREE.CircleGeometry(7,20),new THREE.MeshBasicMaterial({color:0xdfe6c0,fog:false})); moon.position.set(-H*0.3,H*0.7,-H-20); mapGroup.add(moon);
     }
@@ -1141,9 +1178,76 @@ function populateMap(id){
     for(let i=0;i<7;i++){ const p=Pc(2.5); const k=['skeleton','ghost','reaper'][i%3]; addSpawner(p[0],p[1],rand(1.0,1.7),k,rand(2.4,3.8)); }
   }
 }
+/* --- 체력 데미지 --- */
+function damage(amt, x, z){
+  if(ended || ball.hp<=0) return;
+  ball.hp = Math.max(0, ball.hp - amt);
+  hurtT = 0.35;                       // 피격 플래시(HUD가 읽음)
+  if(x!=null){ const ux=(ball.x-x)/(Math.hypot(ball.x-x,ball.z-z)||1), uz=(ball.z-z)/(Math.hypot(ball.x-x,ball.z-z)||1);
+    ball.x=clamp(ball.x+ux*0.6,-MAP_BOUND,MAP_BOUND); ball.z=clamp(ball.z+uz*0.6,-MAP_BOUND,MAP_BOUND); } // 넉백
+  spawnPuff(ball.x,ball.z);
+  updateHUD();
+  if(ball.hp<=0 && !ended) finish(false, '체력이 다 됐다…');
+}
+
+/* --- 공중 공격(헬기): 낮게 날며 30초마다 폭격 --- */
+function buildChopper(){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.9,10,8),MAT(0x3a4658)); body.scale.set(1.4,0.9,1); g.add(body);
+  const glass=new THREE.Mesh(new THREE.SphereGeometry(0.55,9,7),new THREE.MeshPhongMaterial({color:0xbfe6ff,flatShading:true})); glass.position.set(0.7,0.05,0); glass.scale.set(0.9,0.8,0.9); g.add(glass);
+  const tail=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.22,0.22),MAT(0x3a4658)); tail.position.set(-1.5,0.1,0); g.add(tail);
+  const fin=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.5,0.1),MAT(0xc6604a)); fin.position.set(-2.4,0.25,0); g.add(fin);
+  const rotor=new THREE.Mesh(new THREE.BoxGeometry(5.2,0.06,0.3),MAT(0x222831)); rotor.position.y=0.75; g.add(rotor);
+  const trotor=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.9,0.2),MAT(0x222831)); trotor.position.set(-2.45,0.25,0.14); g.add(trotor);
+  for(const sx of[-0.5,0.5]){ const skid=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.08,0.08),MAT(0x222831)); skid.position.set(0,-0.7,sx*0.6); g.add(skid); }
+  g.userData.rotor=rotor; g.userData.trotor=trotor;
+  return g;
+}
+function buildBomb(){ const g=new THREE.Group();
+  const b=new THREE.Mesh(new THREE.SphereGeometry(0.3,9,7),MAT(0x2a2e36)); b.scale.set(1,1.3,1); g.add(b);
+  const fin=new THREE.Mesh(new THREE.ConeGeometry(0.22,0.3,4),MAT(0xc6604a)); fin.position.y=0.32; g.add(fin);
+  return g;
+}
+function spawnChopper(){
+  chopper=buildChopper(); chopper.position.set(0,9,0); scene.add(chopper);
+  chopperT=Math.random()*6.28; attackTimer=AIR_ATTACK_EVERY*0.5;   // 첫 공격은 ~15초 후
+}
+function dropBomb(tx,tz){
+  const grp=buildBomb(); grp.position.set(tx, 8.5, tz); scene.add(grp);
+  // 착탄 지점 표시(빨간 링)
+  const mk=new THREE.Mesh(new THREE.RingGeometry(0.6,1.0,24),new THREE.MeshBasicMaterial({color:0xff3b3b,transparent:true,opacity:0.7,side:THREE.DoubleSide}));
+  mk.rotation.x=-Math.PI/2; mk.position.set(tx,0.05,tz); scene.add(mk);
+  bombs.push({ grp, mk, tx, tz, y:8.5, vy:0 });
+}
+function updateChopper(dt){
+  if(!chopper) return;
+  chopperT += dt*0.5;
+  const R = MAP_BOUND*0.7;
+  chopper.position.set(Math.cos(chopperT)*R, 8.5+Math.sin(chopperT*1.7)*0.6, Math.sin(chopperT)*R);
+  chopper.rotation.y = -chopperT + Math.PI/2;
+  if(chopper.userData.rotor) chopper.userData.rotor.rotation.y += dt*30;
+  if(chopper.userData.trotor) chopper.userData.trotor.rotation.x += dt*30;
+  attackTimer -= dt;
+  if(attackTimer<=0){ attackTimer=AIR_ATTACK_EVERY; dropBomb(ball.x, ball.z); }
+}
+function updateBombs(dt){
+  for(let i=bombs.length-1;i>=0;i--){ const b=bombs[i];
+    b.vy += 14*dt; b.y -= b.vy*dt; b.grp.position.y=b.y; b.grp.rotation.x+=dt*4;
+    if(b.mk){ b.mk.material.opacity = 0.4+0.4*Math.abs(Math.sin(performance.now()*0.012)); }
+    if(b.y<=0.2){
+      for(let k=0;k<6;k++) spawnPuff(b.tx+rand(-1,1), b.tz+rand(-1,1));
+      const d=Math.hypot(ball.x-b.tx, ball.z-b.tz);
+      if(d < 2.4) damage(20, b.tx, b.tz);   // 폭발 반경
+      scene.remove(b.grp); scene.remove(b.mk); bombs.splice(i,1);
+    }
+  }
+}
+
 function updateMapExtras(dt){
   updateMonsters(dt);
   if(spawners.length) updateSpawners(dt);
+  updateChopper(dt); updateBombs(dt);
+  if(hurtT>0) hurtT=Math.max(0,hurtT-dt);
   if(windowGhost){ ambT+=dt; const o=Math.max(0,Math.sin(ambT*0.55))*0.88;
     const M=windowGhost.userData.mats; M[0].opacity=o; M[1].opacity=o; windowGhost.position.x=Math.sin(ambT*0.4)*1.1; }
 }
@@ -1509,6 +1613,7 @@ function emitState(){
     goalPct: goalPct,
     goalText: (isMap||MODE==='room') ? (remain||holes.length? ('남은 구멍 '+(isMap?remain:holes.length)+'개'):'모든 구멍 제거!')
               : (goalPct>=1?'목표 달성!':'목표 '+fmtSizePlain(goalR())),
+    hasHp: isMap, hp: Math.round(ball.hp||0), hpMax: ball.hpMax||100, hpPct: (ball.hpMax? (ball.hp/ball.hpMax):1), hurt: hurtT>0,
     timeLeft: Math.max(0,Math.ceil(timeLeft)), mmss: fmtTime(Math.max(0,timeLeft)), warn: timeLeft<=15 });
 }
 function emitControls(){ EMIT({ type:'controls', music:musicOn, sound:soundOn, gyro:gyroOn }); }
@@ -1539,6 +1644,8 @@ window.__HOLE = {
   get paused(){ return !running && !ended; },
   get holeTotal(){ return holeTotal; },
   holeColors(){ return spawners.map(function(s){ return {r:Math.round(s.r*100)/100, danger:s.grp.userData.danger}; }); },
+  get hp(){ return Math.round(ball.hp); }, get chopper(){ return !!chopper; }, get bombs(){ return bombs.length; },
+  get attackTimer(){ return Math.round(attackTimer*10)/10; }, forceBomb(){ attackTimer=0.001; },
   fallTest(){   // 나보다 큰 구멍으로 이동 후 1스텝 → 빠짐(finish) 발동 확인
     let s=null; for(const sp of spawners){ if(sp.r>ball.r){ s=sp; break; } }
     if(!s) return JSON.stringify({err:'no bigger hole', ballR:ball.r});
@@ -1556,6 +1663,10 @@ function fmtSizePlain(r){ const cm=Math.round(r*100);
   return cm<100? cm+'cm' : Math.floor(cm/100)+'m '+(cm%100)+'cm'; }
 function updateHUD(){
   document.getElementById('sizeVal').innerHTML = fmtSize(ball.r);
+  const hw=document.getElementById('hpWrap');
+  if(hw){ hw.style.display = MAP>0?'flex':'none';
+    if(MAP>0){ const p=Math.max(0,ball.hpMax?ball.hp/ball.hpMax:1); const f=document.getElementById('hpFill');
+      f.style.width=(p*100)+'%'; f.style.background = p<0.3?'#ff3b3b':p<0.6?'#ffb13a':'#4ad06a'; } }
   if(MAP>0){
     const remaining=spawners.length, cleared=holeTotal-remaining;
     document.getElementById('cnt').textContent = remaining;
@@ -1639,6 +1750,9 @@ function clearWorld(){
   for(const s of splats) scene.remove(s.grp); splats=[];
   for(const s of spawners) scene.remove(s.grp); spawners=[];
   if(mapGroup){ scene.remove(mapGroup); mapGroup=null; } windowGhost=null;
+  if(chopper){ scene.remove(chopper); chopper=null; }
+  for(const b of bombs){ scene.remove(b.grp); if(b.mk) scene.remove(b.mk); } bombs=[];
+  attackTimer=0; chopperT=0; hurtT=0;
   roomSink=null; roomTotal=0; ballSink=null;
   blueBall.scale.setScalar(1); blueBall.quaternion.identity();
   ballGroup.scale.setScalar(1);
@@ -1649,7 +1763,7 @@ function beginRound(mode){
   if(mm){ mapId=+mm[1]; mode='roll'; }
   MAP = mapId; MODE = mode;
   clearWorld();
-  ball = { x:0, z:0, r:START_R, vol:0, area:Math.PI*START_R*START_R, heading:0, score:0 };
+  ball = { x:0, z:0, r:START_R, vol:0, area:Math.PI*START_R*START_R, heading:0, score:0, hp:100, hpMax:100 };
   camYaw = 0;
   ballGroup.quaternion.identity();
   MAP_BOUND = (MAP>0) ? MAPS[MAP].bound-1 : GROUND-2;
@@ -1662,6 +1776,7 @@ function beginRound(mode){
     camera.position.set(0, 5.4, -7.4);
     populateMap(MAP);
     holeTotal = spawners.length;   // 클리어 진행도용(모든 구멍 제거 시 클리어)
+    spawnChopper();                // 공중 공격 헬기
     document.getElementById('start').classList.add('hidden');
     document.getElementById('end').classList.add('hidden');
     running=true; ended=false; timeLeft=ROUND_TIME; growMark=START_R;
