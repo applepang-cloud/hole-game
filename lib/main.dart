@@ -14,6 +14,10 @@ external void _holeRestart(JSString mode);
 external void _holeInput(double x, double y);
 @JS('holeToggle')
 external void _holeToggle(JSString what);
+@JS('holePause')
+external void _holePause();
+@JS('holeResume')
+external void _holeResume();
 
 void main() => runApp(const HoleApp());
 
@@ -67,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic> _state = const {}; // 최신 인게임 HUD 상태
   Rect? _stage; // 게임 스테이지(레터박스) 사각형 — HUD 정렬용
   bool _music = true, _sound = true, _gyro = false; // 오디오/자이로 토글 상태
+  bool _paused = false; // 일시정지 여부
 
   @override
   void initState() {
@@ -108,12 +113,14 @@ class _HomeScreenState extends State<HomeScreen> {
         _holeHideGame();
         setState(() {
           _playing = false;
+          _paused = false;
           _result = msg;
         });
         break;
       case 'home': // 인게임 "← 홈" 버튼 → 홈 복귀
         setState(() {
           _playing = false;
+          _paused = false;
           _result = null;
         });
         break;
@@ -125,28 +132,42 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _mode = mode;
       _result = null;
+      _paused = false;
       _playing = true;
     });
     _holeShowGame(mode.toJS);
   }
 
-  // 엔드카드: 다시 하기(같은 모드)
+  // 다시 하기(같은 모드) — 엔드카드 / 일시정지 공용
   void _again() {
     final mode = _mode ?? 'roll';
     setState(() {
       _result = null;
+      _paused = false;
       _playing = true;
     });
     _holeRestart(mode.toJS);
   }
 
-  // 엔드카드: 모드 선택(홈 복귀)
+  // 홈 복귀 — 엔드카드 / 일시정지 공용
   void _toHome() {
     setState(() {
       _result = null;
+      _paused = false;
       _playing = false;
     });
     _holeHideGame();
+  }
+
+  // 일시정지 / 재개
+  void _pause() {
+    _holePause();
+    setState(() => _paused = true);
+  }
+
+  void _resume() {
+    _holeResume();
+    setState(() => _paused = false);
   }
 
   @override
@@ -162,7 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
         )),
       );
     } else if (_playing) {
-      // 인게임: 배경 투명(뒤의 게임 iframe이 비침) + HUD 오버레이(입력·토글 포함)
+      // 인게임: 배경 투명(뒤의 게임 iframe이 비침) + HUD 오버레이(입력·토글·일시정지)
       content = _HudOverlay(
         key: const ValueKey('hud'),
         state: _state,
@@ -170,8 +191,13 @@ class _HomeScreenState extends State<HomeScreen> {
         music: _music,
         sound: _sound,
         gyro: _gyro,
+        paused: _paused,
         onInput: (x, y) => _holeInput(x, y),
         onToggle: (what) => _holeToggle(what.toJS),
+        onPause: _pause,
+        onResume: _resume,
+        onRestart: _again,
+        onHome: _toHome,
       );
     } else {
       content = KeyedSubtree(
@@ -213,14 +239,20 @@ class _HudOverlay extends StatelessWidget {
     required this.music,
     required this.sound,
     required this.gyro,
+    required this.paused,
     required this.onInput,
     required this.onToggle,
+    required this.onPause,
+    required this.onResume,
+    required this.onRestart,
+    required this.onHome,
   });
   final Map<String, dynamic> state;
   final Rect? stage;
-  final bool music, sound, gyro;
+  final bool music, sound, gyro, paused;
   final void Function(double x, double y) onInput;
   final void Function(String what) onToggle;
+  final VoidCallback onPause, onResume, onRestart, onHome;
 
   static const _cream = Color(0xFFFFF7E6);
   static const _ink = Color(0xFF4A3B2A);
@@ -257,12 +289,85 @@ class _HudOverlay extends StatelessWidget {
     return Stack(
       children: [
         // 이동 입력(조이스틱) — 맨 아래 레이어. 위의 버튼이 우선 히트테스트됨.
-        Positioned.fill(child: _GameInputLayer(onInput: onInput)),
+        if (!paused) Positioned.fill(child: _GameInputLayer(onInput: onInput)),
         // HUD 표시(크기/타이머/카운트/목표) — 입력을 막지 않도록 IgnorePointer
         IgnorePointer(child: _readout(stageW)),
         // 오디오/자이로 토글 (우하단)
         Positioned(right: 10, bottom: 14, child: _audioBar()),
+        // 일시정지 버튼 (상단 중앙)
+        Positioned(top: 8, left: 0, right: 0, child: Center(child: _pauseBtn())),
+        // 일시정지 메뉴
+        if (paused) Positioned.fill(child: _pauseModal()),
       ],
+    );
+  }
+
+  Widget _pauseBtn() {
+    return Opacity(
+      opacity: 0.92,
+      child: Material(
+        color: _cream,
+        shape: const CircleBorder(side: BorderSide(color: Colors.white, width: 3)),
+        elevation: 3,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPause,
+          child: const SizedBox(
+            width: 40, height: 40,
+            child: Center(child: Text('⏸', style: TextStyle(fontSize: 18))),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pauseModal() {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque, // 뒤 입력 차단
+      onTap: () {},
+      child: Container(
+        color: const Color(0xCC0A0D12),
+        alignment: Alignment.center,
+        child: Container(
+          width: 280,
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+          decoration: BoxDecoration(
+            color: _cream,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 20, offset: Offset(0, 8))],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('⏸ 일시정지',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: _ink)),
+              const SizedBox(height: 18),
+              _pauseAction('▶  계속하기', const Color(0xFF7BBF3A), onResume),
+              const SizedBox(height: 10),
+              _pauseAction('🔄  다시하기', const Color(0xFFEF5D1E), onRestart),
+              const SizedBox(height: 10),
+              _pauseAction('🏠  홈으로', const Color(0xFF3A3550), onHome),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pauseAction(String label, Color color, VoidCallback onTap) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: onTap,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+          elevation: 3,
+        ),
+        child: Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+      ),
     );
   }
 
@@ -509,7 +614,7 @@ class _ModeSelect extends StatefulWidget {
 }
 
 class _ModeSelectState extends State<_ModeSelect> {
-  bool _eventOpen = false;
+  bool _eventScreen = false; // 이벤트 모드 선택 화면 여부
 
   @override
   Widget build(BuildContext context) {
@@ -531,49 +636,7 @@ class _ModeSelectState extends State<_ModeSelect> {
               style: TextStyle(
                   fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
           const SizedBox(height: 18),
-          for (final m in kMaps)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              child: _ModeCard(mode: m, onTap: () => widget.onPlay(m.id)),
-            ),
-          const SizedBox(height: 6),
-          // 이벤트 모드 토글
-          SizedBox(
-            width: 300,
-            child: Material(
-              color: const Color(0xFF3A3550),
-              borderRadius: BorderRadius.circular(16),
-              elevation: 3,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () => setState(() => _eventOpen = !_eventOpen),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      const Text('🎪', style: TextStyle(fontSize: 22)),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Text('이벤트 모드',
-                            style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white)),
-                      ),
-                      Icon(_eventOpen ? Icons.expand_less : Icons.expand_more,
-                          color: Colors.white),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          if (_eventOpen)
-            for (final m in kEventModes)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 5),
-                child: _ModeCard(mode: m, onTap: () => widget.onPlay(m.id)),
-              ),
+          if (!_eventScreen) ..._mainMenu() else ..._eventMenu(),
           const SizedBox(height: 12),
           const Text('반다이남코 「괴혼」 오마주 · Flutter 셸 + three.js',
               style: TextStyle(fontSize: 10, color: Colors.white70)),
@@ -582,6 +645,73 @@ class _ModeSelectState extends State<_ModeSelect> {
       ),
     );
   }
+
+  // 메인: 맵 3개 + 이벤트 모드 진입 버튼
+  List<Widget> _mainMenu() => [
+        for (final m in kMaps)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: _ModeCard(mode: m, onTap: () => widget.onPlay(m.id)),
+          ),
+        const SizedBox(height: 6),
+        SizedBox(
+          width: 300,
+          child: Material(
+            color: const Color(0xFF3A3550),
+            borderRadius: BorderRadius.circular(16),
+            elevation: 3,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => setState(() => _eventScreen = true),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    Text('🎪', style: TextStyle(fontSize: 22)),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text('이벤트 모드',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+                    ),
+                    Icon(Icons.chevron_right, color: Colors.white),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ];
+
+  // 이벤트 모드: 2개 게임 모드 중 하나 선택 + 뒤로
+  List<Widget> _eventMenu() => [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 6),
+          child: Text('🎪 이벤트 모드 · 게임 선택',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+        ),
+        for (final m in kEventModes)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: _ModeCard(mode: m, onTap: () => widget.onPlay(m.id)),
+          ),
+        const SizedBox(height: 6),
+        SizedBox(
+          width: 300,
+          child: OutlinedButton.icon(
+            onPressed: () => setState(() => _eventScreen = false),
+            style: OutlinedButton.styleFrom(
+              backgroundColor: const Color(0x33FFFFFF),
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Colors.white70, width: 2),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            icon: const Icon(Icons.arrow_back, size: 18),
+            label: const Text('뒤로', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ),
+      ];
 }
 
 class _ModeCard extends StatelessWidget {

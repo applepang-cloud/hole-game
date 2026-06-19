@@ -80,6 +80,9 @@
       window.holeInput = function(x,y){
         try{ var e=frame.contentWindow && frame.contentWindow.__holeEngine; if(e && e.input) e.input(x,y); }catch(_){}
       };
+      // Flutter 일시정지/재개
+      window.holePause  = function(){ try{ frame.contentWindow.__holeEngine.pause(); }catch(_){} };
+      window.holeResume = function(){ try{ frame.contentWindow.__holeEngine.resume(); }catch(_){} };
       // Flutter HUD 오디오/자이로 토글 → 게임 기존 핸들러 재사용
       window.holeToggle = function(what){
         try{
