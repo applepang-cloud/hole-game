@@ -59,9 +59,9 @@ children.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before
 children.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 },
   children: [run("게임 개발 계획서 (기획서)", { bold: true, size: 30, color: INK })] }));
 children.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 30 },
-  children: [run("캐주얼 3D 홀(Hole) 게임 · 광고 중심 + 인앱결제 보조 · 레벨 1,000개", { size: 19, color: "555555" })] }));
+  children: [run("캐주얼 3D 홀(Hole) 게임 · 광고 중심 + 인앱결제 보조 · 레벨 1,000개(1차 출시 600)", { size: 19, color: "555555" })] }));
 children.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 220 },
-  children: [run("문서 버전 v0.1 · 2026-06-19 · 기준 빌드 katamari-v6.html", { size: 17, color: "888888" })] }));
+  children: [run("문서 버전 v0.3 · 2026-06-19 · 기준 빌드 katamari-v7.html · 퍼블리싱 계약 진행 중", { size: 17, color: "888888" })] }));
 
 /* 0. 한눈에 보기 */
 children.push(H("0. 한눈에 보기 (Executive Summary)", HeadingLevel.HEADING_1));
@@ -69,19 +69,32 @@ children.push(simpleTable(["항목", "내용"], [
   ["핵심 루프", "구멍을 굴려 물건을 빨아들여 → 커지고 → 목표 크기/제한시간 달성 → 다음 레벨"],
   ["1차 모드", "구멍 빨아들이기(hole)를 메인 진행 모드로 정식화 (나머지 2모드는 보너스/이벤트)"],
   ["진행 구조", "20 월드 × 50 레벨 = 1,000 레벨, 월드별 테마·난이도 곡선"],
+  ["출시 범위", "1차 출시 600레벨(12월드×50) → 이후 업데이트로 1,000 확장"],
+  ["퍼블리싱", "퍼블리셔(배급사) 계약 진행 중 — 글로벌 출시·UA·정산 협의"],
   ["수익화", "보상형 광고(부활·보상2배·아이템) + 전면광고(레벨 사이) + IAP(광고제거·코인팩·스타터팩)"],
-  ["아이템", "Hole.io / Going Balls 등 벤치마킹: 시간연장·자석·부스트·시작크기업·부활"],
-  ["우선순위", "①기본 게임 → ②레벨/진행저장 → ③메타(홈·상점·재화) → ④아이템 → ⑤수익화 → ⑥1,000레벨 콘텐츠"],
+  ["아이템", "벤치마킹: 시간연장·자석·스피드부스트·가속로켓·점프·시작크기업·코인2배·부활"],
+  ["신규 모드", "멀티플레이 경쟁(§7), 페인트 그림완성(§8)"],
+  ["우선순위", "①기본 게임 → ②레벨/진행저장 → ③메타(홈·상점·재화) → ④아이템 → ⑤수익화 → ⑥600레벨 출시"],
 ], [2100, 7260]));
+
+/* 0.5 현재 구현 현황 */
+children.push(H("현재 구현 현황 (빌드 v7)", HeadingLevel.HEADING_2));
+children.push(bullet([run("테마 맵 6종: ", { bold: true }), run("내 방(개미·쥐·고양이·창밖 귀신) / 마당(마을사람·유령·호박) / 마트(좀비) / 학교(도깨비·해골) / 도시(시민, 십자도로·인도·횡단보도 바닥) / 저승(해골·유령·저승사자).")]));
+children.push(bullet([run("구멍: ", { bold: true }), run("작은 건 굴러 덮어 메우고(보라=메울 수 있음), 큰 건 빠져서 실패(검정=위험) — 색은 내 크기에 따라 실시간 변화. 모든 구멍 제거 시 클리어.")]));
+children.push(bullet([run("성장: ", { bold: true }), run("일반 물체 깔아뭉개기/흡수는 조금, 구멍 메우면 크게.")]));
+children.push(bullet([run("위협/전투: ", { bold: true }), run("몬스터가 추격·공격(종류별 데미지), 공중 헬기가 30초마다 폭격(착탄 예고링). 체력(HP 300) 게이지, 0이면 게임오버. 몬스터 사망 시 ‘으악’ 효과음.")]));
+children.push(bullet([run("조작/메타: ", { bold: true }), run("일시정지(계속·다시하기·홈), 6맵 + 이벤트 모드(공 굴리기·구멍 빨아들이기). 플레이 볼=파란 볼.")]));
+children.push(bullet([run("기술/게시: ", { bold: true }), run("Flutter 셸 + three.js iframe(postMessage), GitHub Pages(https) 게시. 헤드리스 검증 훅 window.__HOLE.")]));
 
 /* 1. 비전 & 벤치마킹 */
 children.push(H("1. 게임 비전 & 벤치마킹", HeadingLevel.HEADING_1));
-children.push(P("컨셉: 괴혼(카타마리)의 “굴려서 키운다” 손맛 + Hole.io류 모바일 캐주얼의 짧고 반복적인 레벨·광고 수익 구조. 한 판 30초~2분, “한 판만 더” 도파민.", { run: { size: 19 } }));
+children.push(P("컨셉: 「굴려라 왕자님」/「괴혼(카타마리 다마시)」의 “굴려서 키운다” 손맛 + Hole.io류 모바일 캐주얼의 짧고 반복적인 레벨·광고 수익 구조. 한 판 30초~2분, “한 판만 더” 도파민.", { run: { size: 19 } }));
 children.push(H("벤치마킹 대상", HeadingLevel.HEADING_2));
 children.push(simpleTable(["게임", "배울 점", "적용 포인트"], [
+  ["굴려라 왕자님 / 괴혼", "굴려서 키우는 손맛, 2인 대전(더 많이 차지)", "코어 손맛, 멀티 경쟁 모드(§7)"],
   ["Hole.io", "구멍 성장, 전면광고 빈도, 스킨 IAP", "핵심 흡수 손맛, 스킨 상점"],
   ["Going Balls", "레벨 진행 + 보상형 광고 코인·부활", "레벨 맵 진행, 부활 광고"],
-  ["Hole and Fill 류", "시간연장·자석 등 소모성 부스트", "인게임 아이템 5종"],
+  ["Hole and Fill 류", "시간연장·자석 등 소모성 부스트", "인게임 아이템"],
   ["Voodoo 공통", "클리어 후 보상 2배, 스타터팩", "보상 2배·스타터팩 IAP"],
 ], [2100, 4060, 3200]));
 children.push(H("실패/종료 조건 (벤치마킹 확인됨)", HeadingLevel.HEADING_2));
@@ -121,6 +134,8 @@ children.push(simpleTable(["아이템", "효과", "획득"], [
   ["⏱️ 시간 연장", "시작 시간 +15초", "코인/광고"],
   ["🧲 자석", "흡수 가능한 대상을 끌어당기는 반경 ↑ (10초)", "코인/광고"],
   ["⚡ 스피드 부스트", "이동속도 +30% (8초)", "코인"],
+  ["🚀 가속 로켓", "폭발적 직진 돌진. 멀티에선 상대 진영 파고들어 빼앗기", "코인/광고"],
+  ["🦘 점프", "짧게 점프 — 큰(검정) 구멍·위험·상대 방해 회피", "코인/광고"],
   ["🟢 시작 크기 업", "시작 반지름 +20%", "코인"],
   ["✨ 코인 2배", "이번 판 코인 획득 ×2", "광고/보석"],
 ], [2400, 4960, 2000]));
@@ -186,20 +201,51 @@ children.push(H("6.6 실패 시 (Lose)", HeadingLevel.HEADING_2));
 ["실패(시간초과/목표미달/블랙홀에 빠짐)", "└ 부활? ▶광고 또는 💎보석 → +10초 같은 자리 재개 / 아니오", "    └ 재도전 → 라운드 준비 / 홈으로"].forEach((t, i) => children.push(flow(t, i)));
 children.push(P("요소: “아쉬워요!”, 현재 크기/목표 대비, [부활 ▶광고](1회 무료), [다시하기], [홈]", { run: { size: 18, italics: true, color: "666666" } }));
 
-/* 7. 로드맵 */
-children.push(new Paragraph({ pageBreakBefore: true, heading: HeadingLevel.HEADING_1, children: [run("7. 개발 로드맵 (기본 게임 우선)", { bold: true })] }));
+/* 7. 멀티플레이 경쟁 모드 (신규) */
+children.push(new Paragraph({ pageBreakBefore: true, heading: HeadingLevel.HEADING_1, children: [run("7. 멀티플레이 경쟁 모드 (신규)", { bold: true })] }));
+children.push(P("벤치마킹: 「굴려라 왕자님」/「괴혼(카타마리 다마시)」 — 둘이 굴려 더 많이 차지하는 대전 손맛.", { run: { size: 19 } }));
+children.push(H("개요", HeadingLevel.HEADING_2));
+children.push(bullet("같은 맵에서 제한 시간 내 실시간 경쟁(1:1 우선, 추후 N인)."));
+children.push(bullet("각 플레이어는 자기 색의 서로 다른 구멍 세트를 배정(나=보라, 상대=주황). 같은 맵, 다른 목표."));
+children.push(H("빼앗기(스틸) — 핵심 재미", HeadingLevel.HEADING_2));
+children.push(bullet([run("상대 구멍을 메우면(=먹으면): ", { bold: true }), run("내 획득 카운트 +1, 상대 쪽에 구멍이 더 생성(페널티 스폰).")]));
+children.push(bullet("내 구멍만 메우면 안전하지만, 상대 구멍을 빼앗으면 점수도 벌고 상대를 방해. 단 상대 구멍이 나보다 크면(검정) 빼앗다 빠질 위험."));
+children.push(H("승패 & 랭킹", HeadingLevel.HEADING_2));
+children.push(bullet("획득 카운트(내 구멍 + 빼앗은 상대 구멍)순 순위. 인게임 실시간 점수바 + 종료 후 랭킹 화면, 시즌 리더보드(후기)."));
+children.push(H("경쟁 특화 아이템 / 구현 단계", HeadingLevel.HEADING_2));
+children.push(bullet([run("🚀 가속 로켓: ", { bold: true }), run("상대 진영으로 돌진해 구멍 빼앗기. "), run("🦘 점프: ", { bold: true }), run("큰 구멍·상대 방해·위험 지대 건너뛰기.")]));
+children.push(bullet("1차 봇(AI) 대전으로 메커니즘 구현(기존 구멍 색·메우기·빠짐 구조 재활용, 구멍에 owner 추가) → 2차 WebSocket 실시간 동기화(서버 권위적)."));
+
+/* 8. 페인트 모드 (신규) */
+children.push(new Paragraph({ pageBreakBefore: true, heading: HeadingLevel.HEADING_1, children: [run("8. 페인트 모드 (신규)", { bold: true })] }));
+children.push(P("컨셉: 굴리는 손맛 + 색칠놀이/잉크 점유(스플래툰류). 바닥 캔버스를 페인트 볼로 굴러 칠해 그림을 완성한다.", { run: { size: 19 } }));
+children.push(H("개요 & 페인트", HeadingLevel.HEADING_2));
+children.push(bullet("바닥이 캔버스(목표 그림 밑그림·영역별 지정색). 페인트 장착 → 볼이 지나간 자리에 색이 칠해짐(트레일)."));
+children.push(bullet("제한시간 내 목표 그림 N%(예 90%) 이상 칠하면 클리어. 영역별 지정색 일치 시 정확도 보너스."));
+children.push(bullet("페인트 잔량 게이지 소모 → 맵의 페인트 통(리필 지점)에서 보충·색 교체."));
+children.push(H("물 괴물(방해) — 핵심 갈등", HeadingLevel.HEADING_2));
+children.push(bullet("물 괴물(물풍선·해파리·물대포 등)이 칠한 자리를 씻어 지움(원상복구)."));
+children.push(bullet("볼에 물을 끼얹어 일정시간 ‘젖음’ → 페인트 못 칠함(마르거나 페인트 통 거치면 회복). 젖은 구역엔 페인트가 안 묻음."));
+children.push(bullet("대응: 물 괴물을 굴려 납작(squash) 시키거나 회피하고, 마르기 전 빠르게 칠한다."));
+children.push(H("채점 / 아이템 / 구현", HeadingLevel.HEADING_2));
+children.push(bullet("채점: 완성도(%) + 색 정확도 + 남은 시간 → 별 1~3개."));
+children.push(bullet([run("아이템: ", { bold: true }), run("🎨 페인트 리필 · 🛡️ 방수 코팅(물 면역) · 🖌️ 큰 붓(트레일 폭↑).")]));
+children.push(bullet("구현: 바닥 CanvasTexture에 볼 위치마다 스탬프 → 목표 마스크 대비 칠해진 픽셀 비율로 완성도. water 몬스터 종류 추가."));
+
+/* 9. 로드맵 */
+children.push(new Paragraph({ pageBreakBefore: true, heading: HeadingLevel.HEADING_1, children: [run("9. 개발 로드맵 (기본 게임 우선)", { bold: true })] }));
 children.push(simpleTable(["단계", "내용", "상태"], [
   ["Phase 0 — 기본 게임 정련", "3D 홀 흡수 코어, HUD, 자이로 수정, 웹 게시 / 홀 모드 정식화·별3개·콤보·코인", "일부 완료 ✅"],
   ["Phase 1 — 레벨 시스템", "레벨 데이터 모델·로더·난이도 곡선, 진행 저장, 레벨 맵 UI, 절차생성+검증", "예정"],
   ["Phase 2 — 메타", "홈/로비, 코인·보석 재화, 상점, 일일 보상, 설정", "예정"],
   ["Phase 3 — 아이템", "소모성 5종 + 부활 + 영구 업그레이드 + 스킨", "예정"],
   ["Phase 4 — 수익화", "보상형/전면/배너(웹 더미광고), IAP 자리, 빈도 정책", "예정"],
-  ["Phase 5 — 콘텐츠", "20월드 테마·1,000레벨 생성, 밸런싱, 사운드/이펙트 폴리시", "예정"],
-  ["Phase 6 — 출시", "앱 래핑(Capacitor/Flutter) + AdMob/IAP 실연동, 스토어, QA", "예정"],
+  ["Phase 5 — 콘텐츠", "1차 600레벨(12월드) 생성·밸런싱·폴리시 → 출시 (이후 1,000까지 시즌 업데이트)", "예정"],
+  ["Phase 6 — 출시·퍼블리싱", "앱 래핑(Flutter/Capacitor)+AdMob/IAP 실연동, 스토어/QA, 퍼블리셔 계약·소프트론치→글로벌", "진행 중"],
 ], [2700, 5460, 1200]));
 
-/* 8. 기술/리스크 */
-children.push(H("8. 기술 메모 & 리스크", HeadingLevel.HEADING_1));
+/* 10. 기술/리스크 */
+children.push(H("10. 기술 메모 & 리스크", HeadingLevel.HEADING_1));
 children.push(bullet("현재: 단일 HTML + Three.js(r128). 콘텐츠 확장 시 levels.json 외부화. 포팅 방향: Flutter 셸 + three.js iframe/postMessage."));
 children.push(bullet("게시: GitHub Pages(https) — 모바일 자이로/센서는 https 필수."));
 children.push(bullet("검증: 프리뷰 헤드리스 eval로 자동 스모크/밸런싱."));
