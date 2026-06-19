@@ -31,7 +31,8 @@
   canvas#g{ display:block; width:100%; height:100%; }
 
   .hud{ position:absolute; inset:0; pointer-events:none; z-index:4; }
-  body.embedded .hud{ display:none !important; }   /* 임베드 시 HUD는 Flutter 오버레이가 담당 */
+  /* 임베드 시 HUD·오디오바·조이스틱은 Flutter 오버레이가 담당(입력은 __holeEngine로 전달받음) */
+  body.embedded .hud, body.embedded .audiobar, body.embedded .stick{ display:none !important; }
   .top{ position:absolute; top:10px; left:10px; right:10px; display:flex; gap:8px; align-items:flex-start; justify-content:space-between; }
   .panel{ background:var(--cream); border:3px solid #fff; border-radius:14px; box-shadow:0 4px 0 #d8c39a, 0 8px 18px #0003; }
   .sizebox{ padding:7px 13px 8px; text-align:center; min-width:118px; }
@@ -1077,13 +1078,20 @@ function emitState(){
               : (goalPct>=1?'목표 달성!':'목표 '+fmtSizePlain(goalR())),
     timeLeft: Math.max(0,Math.ceil(timeLeft)), mmss: fmtTime(Math.max(0,timeLeft)), warn: timeLeft<=15 });
 }
+function emitControls(){ EMIT({ type:'controls', music:musicOn, sound:soundOn, gyro:gyroOn }); }
 window.__holeEngine = {
-  start: function(m){ beginRound(m); _lastSec=-1; emitState(); },
+  start: function(m){ beginRound(m); _lastSec=-1; emitState(); emitControls(); },
   input: function(x,y){ moveVec={ x:Math.max(-1,Math.min(1,x)), y:Math.max(-1,Math.min(1,y)) }; },
   stop:  function(){ running=false; moveVec={x:0,y:0}; },
+  // Flutter HUD 토글 → 기존 버튼 핸들러 재사용 후 상태 회신
+  toggleMusic: function(){ document.getElementById('bMusic').click(); emitControls(); },
+  toggleSound: function(){ document.getElementById('bSound').click(); emitControls(); },
+  toggleGyro:  function(){ document.getElementById('bGyro').click(); emitControls(); },
+  openTab:     function(){ document.getElementById('bTab').click(); },
+  emitControls: emitControls,
   ready: true
 };
-EMIT({type:'ready'});
+EMIT({type:'ready'}); emitControls();
 
 /* ===================== HUD ===================== */
 function fmtSize(r){ const cm=Math.round(r*100);

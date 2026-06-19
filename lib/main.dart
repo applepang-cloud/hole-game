@@ -10,6 +10,10 @@ external void _holeShowGame(JSString mode);
 external void _holeHideGame();
 @JS('holeRestart')
 external void _holeRestart(JSString mode);
+@JS('holeInput')
+external void _holeInput(double x, double y);
+@JS('holeToggle')
+external void _holeToggle(JSString what);
 
 void main() => runApp(const HoleApp());
 
@@ -58,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic>? _result; // 엔드카드 데이터(null이면 미표시)
   Map<String, dynamic> _state = const {}; // 최신 인게임 HUD 상태
   Rect? _stage; // 게임 스테이지(레터박스) 사각형 — HUD 정렬용
+  bool _music = true, _sound = true, _gyro = false; // 오디오/자이로 토글 상태
 
   @override
   void initState() {
@@ -87,6 +92,12 @@ class _HomeScreenState extends State<HomeScreen> {
           (msg['w'] as num).toDouble(),
           (msg['h'] as num).toDouble(),
         );
+        if (mounted) setState(() {});
+        break;
+      case 'controls': // 오디오/자이로 토글 상태 동기화
+        _music = msg['music'] == true;
+        _sound = msg['sound'] == true;
+        _gyro = msg['gyro'] == true;
         if (mounted) setState(() {});
         break;
       case 'over': // 게임 오버 → iframe 숨기고 Flutter 엔드카드 표시
@@ -147,8 +158,17 @@ class _HomeScreenState extends State<HomeScreen> {
         )),
       );
     } else if (_playing) {
-      // 인게임: 배경 투명(뒤의 게임 iframe이 비침) + HUD 오버레이만
-      content = _HudOverlay(key: const ValueKey('hud'), state: _state, stage: _stage);
+      // 인게임: 배경 투명(뒤의 게임 iframe이 비침) + HUD 오버레이(입력·토글 포함)
+      content = _HudOverlay(
+        key: const ValueKey('hud'),
+        state: _state,
+        stage: _stage,
+        music: _music,
+        sound: _sound,
+        gyro: _gyro,
+        onInput: (x, y) => _holeInput(x, y),
+        onToggle: (what) => _holeToggle(what.toJS),
+      );
     } else {
       content = KeyedSubtree(
         key: const ValueKey('home'),
@@ -179,11 +199,24 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 /// 인게임 HUD를 Flutter로 그리는 투명 오버레이.
-/// 게임이 보내준 stage 사각형(레터박스) 안에 게임 DOM HUD와 동일 좌표로 배치한다.
+/// 게임이 보내준 stage 사각형(레터박스) 안에 게임 DOM HUD와 동일 좌표로 배치하고,
+/// 이동 입력(조이스틱)과 오디오/자이로 토글까지 Flutter가 받아 게임 엔진으로 전달한다.
 class _HudOverlay extends StatelessWidget {
-  const _HudOverlay({super.key, required this.state, required this.stage});
+  const _HudOverlay({
+    super.key,
+    required this.state,
+    required this.stage,
+    required this.music,
+    required this.sound,
+    required this.gyro,
+    required this.onInput,
+    required this.onToggle,
+  });
   final Map<String, dynamic> state;
   final Rect? stage;
+  final bool music, sound, gyro;
+  final void Function(double x, double y) onInput;
+  final void Function(String what) onToggle;
 
   static const _cream = Color(0xFFFFF7E6);
   static const _ink = Color(0xFF4A3B2A);
@@ -210,13 +243,26 @@ class _HudOverlay extends StatelessWidget {
           top: rect.top,
           width: rect.width,
           height: rect.height,
-          child: _stageHud(rect.width),
+          child: _stageContent(rect.width),
         ),
       ],
     );
   }
 
-  Widget _stageHud(double stageW) {
+  Widget _stageContent(double stageW) {
+    return Stack(
+      children: [
+        // 이동 입력(조이스틱) — 맨 아래 레이어. 위의 버튼이 우선 히트테스트됨.
+        Positioned.fill(child: _GameInputLayer(onInput: onInput)),
+        // HUD 표시(크기/타이머/카운트/목표) — 입력을 막지 않도록 IgnorePointer
+        IgnorePointer(child: _readout(stageW)),
+        // 오디오/자이로 토글 (우하단)
+        Positioned(right: 10, bottom: 14, child: _audioBar()),
+      ],
+    );
+  }
+
+  Widget _readout(double stageW) {
     final sizeStr = (state['size'] ?? '') as String;
     final mmss = (state['mmss'] ?? '0:00') as String;
     final warn = state['warn'] == true;
@@ -292,6 +338,41 @@ class _HudOverlay extends StatelessWidget {
     );
   }
 
+  Widget _audioBar() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _audioBtn('↗', true, () => onToggle('tab')),
+        const SizedBox(width: 7),
+        _audioBtn('📱', gyro, () => onToggle('gyro')),
+        const SizedBox(width: 7),
+        _audioBtn('♪', music, () => onToggle('music')),
+        const SizedBox(width: 7),
+        _audioBtn(sound ? '🔊' : '🔇', sound, () => onToggle('sound')),
+      ],
+    );
+  }
+
+  Widget _audioBtn(String label, bool on, VoidCallback onTap) {
+    return Opacity(
+      opacity: on ? 1.0 : 0.45,
+      child: Material(
+        color: _cream,
+        shape: const CircleBorder(side: BorderSide(color: Colors.white, width: 3)),
+        elevation: 3,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            width: 42,
+            height: 42,
+            child: Center(child: Text(label, style: const TextStyle(fontSize: 17))),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _goalBar(double pct, String text) {
     return Container(
       height: 15,
@@ -320,6 +401,97 @@ class _HudOverlay extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 이동 입력 레이어 — 드래그를 게임 조이스틱과 동일하게 매핑해 onInput(x,y, -1..1)으로 전달.
+/// 게임의 moveStick(max=46, deadzone>6)을 그대로 복제한다. 떠다니는 조이스틱도 직접 그린다.
+class _GameInputLayer extends StatefulWidget {
+  const _GameInputLayer({required this.onInput});
+  final void Function(double x, double y) onInput;
+  @override
+  State<_GameInputLayer> createState() => _GameInputLayerState();
+}
+
+class _GameInputLayerState extends State<_GameInputLayer> {
+  static const double _max = 46, _dead = 6;
+  Offset? _origin;
+  Offset _knob = Offset.zero;
+
+  void _start(Offset p) {
+    setState(() {
+      _origin = p;
+      _knob = Offset.zero;
+    });
+    widget.onInput(0, 0);
+  }
+
+  void _move(Offset p) {
+    if (_origin == null) return;
+    var d = p - _origin!;
+    final mag = d.distance;
+    if (mag > _max) d = d * (_max / mag);
+    setState(() => _knob = d);
+    widget.onInput(d.distance > _dead ? d.dx / _max : 0, d.distance > _dead ? d.dy / _max : 0);
+  }
+
+  void _end() {
+    if (_origin == null) return;
+    setState(() => _origin = null);
+    widget.onInput(0, 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final origin = _origin;
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (e) => _start(e.localPosition),
+      onPointerMove: (e) => _move(e.localPosition),
+      onPointerUp: (e) => _end(),
+      onPointerCancel: (e) => _end(),
+      child: origin == null
+          ? const SizedBox.expand()
+          : Stack(
+              children: [
+                Positioned(
+                  left: origin.dx - 60,
+                  top: origin.dy - 60,
+                  width: 120,
+                  height: 120,
+                  child: const DecoratedBox(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0x33FFFFFF),
+                      border: Border.fromBorderSide(
+                          BorderSide(color: Color(0x88FFFFFF), width: 3)),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: origin.dx - 27 + _knob.dx,
+                  top: origin.dy - 27 + _knob.dy,
+                  width: 54,
+                  height: 54,
+                  child: const DecoratedBox(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Colors.white, Color(0xFFFFE7BD)],
+                      ),
+                      border: Border.fromBorderSide(
+                          BorderSide(color: Colors.white, width: 3)),
+                      boxShadow: [
+                        BoxShadow(color: Color(0x66000000), blurRadius: 8, offset: Offset(0, 3))
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }

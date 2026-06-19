@@ -36,8 +36,7 @@
     /* 평소엔 Flutter가 불투명하게 게임을 덮고, 플레이 중엔 Flutter를 투명+통과시켜 게임이 보이고 조작됨 */
     #holeGame{ position:fixed; inset:0; width:100%; height:100%; border:0; z-index:1;
       display:none; background:#0a0d12; }
-    flutter-view{ z-index:2; }                       /* iframe(1) 위에 Flutter HUD */
-    html.playing flutter-view{ pointer-events:none; }/* 플레이 중 터치가 게임으로 통과 */
+    flutter-view{ z-index:2; }                       /* iframe(1) 위에 Flutter HUD(입력은 Flutter가 받아 게임으로 전달) */
     #holeBack{ position:fixed; top:12px; left:12px; z-index:10000; display:none;
       font:700 14px/1 "Malgun Gothic",sans-serif; color:#4a3b2a; cursor:pointer;
       background:#fff7e6; border:3px solid #fff; border-radius:12px; padding:9px 14px;
@@ -77,6 +76,20 @@
       };
       // Flutter에서 호출 — 엔드카드 "다시 하기"(같은 모드 재시작)
       window.holeRestart = function(mode){ window.holeShowGame(mode); };
+      // Flutter HUD → 게임 이동 입력 전달(조이스틱 벡터, -1..1)
+      window.holeInput = function(x,y){
+        try{ var e=frame.contentWindow && frame.contentWindow.__holeEngine; if(e && e.input) e.input(x,y); }catch(_){}
+      };
+      // Flutter HUD 오디오/자이로 토글 → 게임 기존 핸들러 재사용
+      window.holeToggle = function(what){
+        try{
+          var e=frame.contentWindow && frame.contentWindow.__holeEngine; if(!e) return;
+          if(what==='music') e.toggleMusic();
+          else if(what==='sound') e.toggleSound();
+          else if(what==='gyro') e.toggleGyro();
+          else if(what==='tab') e.openTab();
+        }catch(_){}
+      };
       back.addEventListener('click', function(){ window.holeHideGame(); notify('home'); });
       // 게임 → Flutter 메시지 중계 (Dart가 window.__holeOnGameMsg 등록)
       window.addEventListener('message', function(e){
