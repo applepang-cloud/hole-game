@@ -1,16 +1,16 @@
-param([int]$Port = 8865)
+param([int]$Port = 8865, [string]$Root = ".", [string]$Index = "katamari-v6.html")
 $ErrorActionPreference = "Stop"
-$root = $PSScriptRoot
+$root = Join-Path $PSScriptRoot $Root
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:$Port/")
 $listener.Start()
 Write-Host "Serving $root on http://localhost:$Port/"
-$mime = @{ ".html"="text/html"; ".css"="text/css"; ".js"="application/javascript"; ".png"="image/png"; ".ico"="image/x-icon" }
+$mime = @{ ".html"="text/html"; ".css"="text/css"; ".js"="application/javascript"; ".png"="image/png"; ".ico"="image/x-icon"; ".json"="application/json"; ".wasm"="application/wasm"; ".woff2"="font/woff2"; ".ttf"="font/ttf"; ".symbols"="text/plain"; ".otf"="font/otf" }
 try {
   while ($listener.IsListening) {
     $ctx = $listener.GetContext()
     $path = [System.Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath)
-    if ($path -eq "/" -or $path -eq "") { $path = "/katamari-v6.html" }
+    if ($path -eq "/" -or $path -eq "") { $path = "/$Index" }
     $file = Join-Path $root ($path.TrimStart("/"))
     if (Test-Path $file -PathType Leaf) {
       $bytes = [System.IO.File]::ReadAllBytes($file)

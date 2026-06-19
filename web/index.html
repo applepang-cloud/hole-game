@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="hole_game">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>굴려라! — 데굴데굴 별왕자</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    /* three.js 게임 오버레이 iframe (platform view 회피: 순수 DOM 오버레이) */
+    #holeGame{ position:fixed; inset:0; width:100%; height:100%; border:0; z-index:9999;
+      display:none; background:#0a0d12; }
+    #holeBack{ position:fixed; top:12px; left:12px; z-index:10000; display:none;
+      font:700 14px/1 "Malgun Gothic",sans-serif; color:#4a3b2a; cursor:pointer;
+      background:#fff7e6; border:3px solid #fff; border-radius:12px; padding:9px 14px;
+      box-shadow:0 4px 0 #d8c39a, 0 8px 18px #0004; }
+    #holeGame.show, #holeBack.show{ display:block; }
+  </style>
+</head>
+<body>
+  <!-- 인게임 3D는 three.js(iframe), 셸·UI는 Flutter -->
+  <iframe id="holeGame" title="game"
+    allow="gyroscope; accelerometer; magnetometer; fullscreen; autoplay"></iframe>
+  <button id="holeBack">← 홈</button>
+
+  <script>
+    // Flutter ↔ three.js 게임 브리지
+    (function(){
+      var frame = document.getElementById('holeGame');
+      var back  = document.getElementById('holeBack');
+      var SRC = 'game/index.html';
+      function notify(type){ if(typeof window.__holeOnGameMsg==='function') window.__holeOnGameMsg(JSON.stringify({hole:true,type:type})); }
+      // Flutter(Dart)에서 호출 — 게임 표시
+      window.holeShowGame = function(mode){
+        if(!frame.src){ frame.src = SRC + (mode ? ('?mode='+mode) : ''); }
+        frame.classList.add('show'); back.classList.add('show');
+      };
+      // Flutter에서 호출 — 게임 숨김(홈 복귀)
+      window.holeHideGame = function(){ frame.classList.remove('show'); back.classList.remove('show'); };
+      back.addEventListener('click', function(){ window.holeHideGame(); notify('home'); });
+      // 게임 → Flutter 메시지 중계 (Dart가 window.__holeOnGameMsg 등록)
+      window.addEventListener('message', function(e){
+        var d = e.data;
+        if(d && typeof d === 'object' && d.hole && typeof window.__holeOnGameMsg === 'function'){
+          window.__holeOnGameMsg(JSON.stringify(d));
+        }
+      });
+    })();
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
