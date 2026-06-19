@@ -54,6 +54,11 @@
   .goalbar > span{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     font-size:9px; font-weight:800; color:#3c5a18; text-shadow:0 1px 0 #fff; }
 
+  #pauseBtn{ position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:6;
+    width:42px; height:42px; border-radius:50%; border:3px solid #fff; background:var(--cream);
+    box-shadow:0 4px 0 #d8c39a; font-size:17px; cursor:pointer; color:var(--ink); pointer-events:auto; }
+  #pauseBtn:active{ transform:translateX(-50%) translateY(2px); box-shadow:0 2px 0 #d8c39a; }
+  body.embedded #pauseBtn, body.embedded #pauseVeil{ display:none !important; }
   .audiobar{ position:absolute; right:10px; bottom:14px; display:flex; gap:7px; z-index:6; pointer-events:auto; }
   .audiobar button{ width:42px; height:42px; border-radius:50%; border:3px solid #fff; background:var(--cream);
     box-shadow:0 4px 0 #d8c39a; font-size:17px; cursor:pointer; color:var(--ink); }
@@ -140,6 +145,14 @@
     <div id="toast" class="toast hidden"></div>
 
     <div class="stick" id="stick"><i id="stickKnob"></i></div>
+
+    <button id="pauseBtn" title="일시정지">⏸</button>
+    <div class="veil hidden" id="pauseVeil">
+      <h1 class="jua">일시정지</h1>
+      <button class="btn" id="pResume">▶  계속하기</button>
+      <button class="btn" id="pAgain">🔄  다시하기</button>
+      <button class="btn ghost" id="pHome">🏠  홈으로</button>
+    </div>
 
     <div class="veil" id="start">
       <div class="prince-emoji">🤴</div>
@@ -859,6 +872,9 @@ function buildWindowGhost(){ const grp=new THREE.Group();
   const mouth=new THREE.Mesh(new THREE.RingGeometry(0.06,0.18,12,1,0,Math.PI),em); mouth.position.set(0,-0.22,0.02); mouth.rotation.z=Math.PI; grp.add(mouth);
   grp.userData.mats=[m,em]; return grp; }
 
+/* 맵(파란 볼)/일반 롤 공통 성장 반영 */
+function refreshActive(){ if(MAP>0) refreshBlue(); else refreshBall(); }
+
 /* --- 납작(squash) → 펑 연출 --- */
 function addFlat(grp,x,z){
   if(!grp.userData.hasShadow) addShadow(grp, Math.max(0.2, grp.userData.size*0.9));
@@ -868,7 +884,16 @@ function addFlat(grp,x,z){
 function squash(grp,x,z,size,growK){
   splats.push({ grp, t:0, dur:0.30 });
   ball.vol += Math.pow(size,3)*ABSORB*(growK==null?0.7:growK);
-  ball.score++; refreshBall(); SFX.pop(ball.score); updateHUD();
+  ball.score++; refreshActive(); SFX.pop(ball.score); updateHUD();
+  if(ball.r>=goalR() && !ended) finish(true);
+}
+/* 맵: 작은 물건은 파란 볼 밑으로 빨려들어 사라지며 성장(붙지 않음) */
+function mapSwallow(item){
+  loose.splice(loose.indexOf(item),1);
+  falling.push({ grp:item.grp, x0:item.x, z0:item.z, y0:(item.y||0.15)+0.1, t:0, dur:0.4,
+    spin:rand(4,9), tilt:rand(3,7), toY:Math.max(0.3,ball.r*0.5) });
+  ball.vol += Math.pow(item.size,3)*ABSORB; ball.score++;
+  refreshBlue(); SFX.pop(ball.score); updateHUD();
   if(ball.r>=goalR() && !ended) finish(true);
 }
 function updateSplats(dt){
@@ -923,7 +948,7 @@ function updateSpawners(dt){
       // 내가 더 크다 → 덮어서 메움(성장)
       if(d < ball.r*0.85){
         spawnPuff(s.x,s.z); spawnPuff(s.x,s.z); scene.remove(s.grp); spawners.splice(i,1);
-        ball.vol += s.r*s.r*s.r*1.3; ball.score++; refreshBall(); SFX.loot(); updateHUD(); continue;
+        ball.vol += s.r*s.r*s.r*1.3; ball.score++; refreshActive(); SFX.loot(); updateHUD(); continue;
       }
     } else {
       // 구멍이 나보다 크다 → 중심에 깊이 들어가면 빠진다(실패)
@@ -1336,7 +1361,7 @@ function updateAbsorb(dt){
         // 가구/큰 사물 → 충분히 크면 납작(squash)→펑, 아니면 벽
         if(r >= it.size*FLATTEN_RATIO){ loose.splice(i,1); squash(it.grp,it.x,it.z,it.size,0.8); }
         else { const nx=(ball.x-it.x)/(d||1), nz=(ball.z-it.z)/(d||1); ball.x=it.x+nx*reach; ball.z=it.z+nz*reach; }
-      } else if(it.size <= r*PICK_RATIO){ collect(it); }
+      } else if(it.size <= r*PICK_RATIO){ MAP>0 ? mapSwallow(it) : collect(it); }
       else {
         // 너무 큰 물건 → 벽처럼 밀어냄
         const nx=(ball.x-it.x)/(d||1), nz=(ball.z-it.z)/(d||1);
@@ -1379,11 +1404,11 @@ function updateBall(dt){
     ball.heading = Math.atan2(ux, uz);
     const axis = _v.set(uz, 0, -ux).normalize();
     _q.setFromAxisAngle(axis, dist / ball.r);
-    ballGroup.quaternion.premultiply(_q);
+    (MAP>0 ? blueBall : ballGroup).quaternion.premultiply(_q);
   }
   const lim=MAP_BOUND;
   ball.x=clamp(ball.x,-lim,lim); ball.z=clamp(ball.z,-lim,lim);
-  ballGroup.position.set(ball.x, ball.r, ball.z);
+  (MAP>0 ? blueBall : ballGroup).position.set(ball.x, ball.r, ball.z);
 }
 
 function updateHole(dt){
@@ -1418,7 +1443,7 @@ function updateCamera(dt){
   camera.position.z += (cz-camera.position.z)*Math.min(1,dt*4);
   camera.lookAt(ball.x, lookY, ball.z);
 
-  if(MODE==='roll' && prince){
+  if(MODE==='roll' && MAP===0 && prince){
     const pd = ball.r + 0.35;
     prince.position.set(ball.x - Math.sin(ball.heading)*pd, 0, ball.z - Math.cos(ball.heading)*pd);
     prince.rotation.y = ball.heading;
@@ -1510,7 +1535,7 @@ window.__HOLE = {
   get ballR(){ return ball.r; }, get score(){ return ball.score; }, get running(){ return running; },
   kinds(){ var k={}; monsters.forEach(function(m){k[m.kind]=(k[m.kind]||0)+1;}); return k; },
   step(dt){ dt=dt||0.05; if(running&&!ended){ if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0) updateMapExtras(dt); } } updateSplats(dt); },
-  warp(r){ ball.vol=Math.pow(r/START_R,3)-1; refreshBall(); },  // 공 크기 강제(테스트)
+  warp(r){ ball.vol=Math.pow(r/START_R,3)-1; refreshActive(); },  // 공 크기 강제(테스트)
   get paused(){ return !running && !ended; },
   fallTest(){   // 나보다 큰 구멍으로 이동 후 1스텝 → 빠짐(finish) 발동 확인
     let s=null; for(const sp of spawners){ if(sp.r>ball.r){ s=sp; break; } }
@@ -1560,7 +1585,7 @@ function loop(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   try{
   if(running && !ended){
-    if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0) updateMapExtras(dt); }
+    if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0){ updateMapExtras(dt); updateFalling(dt); } }
     else if(MODE==='hole'){ updateHole(dt); updateAbsorbHole(dt); updateFalling(dt); }
     else { updateRoom(dt); updateFalling(dt); }
     updateCamera(dt);
@@ -1578,11 +1603,12 @@ function loop(now){
       blueBall.scale.setScalar(Math.max(0.08, 1-0.7*t));
     }
     if(MODE==='roll' && ballSink){
+      const bg=(MAP>0?blueBall:ballGroup);
       ballSink.t+=dt; const t=Math.min(1,ballSink.t/0.6);
-      ballGroup.position.x += (ballSink.x-ballGroup.position.x)*Math.min(1,dt*6);
-      ballGroup.position.z += (ballSink.z-ballGroup.position.z)*Math.min(1,dt*6);
-      ballGroup.position.y = ball.r - t*(ball.r+2.4);
-      ballGroup.scale.setScalar(Math.max(0.08, 1-0.7*t));
+      bg.position.x += (ballSink.x-bg.position.x)*Math.min(1,dt*6);
+      bg.position.z += (ballSink.z-bg.position.z)*Math.min(1,dt*6);
+      bg.position.y = ball.r - t*(ball.r+2.4);
+      bg.scale.setScalar(Math.max(0.08, 1-0.7*t));
     }
     updateCamera(dt);
   }
@@ -1620,14 +1646,11 @@ function beginRound(mode){
   ballGroup.quaternion.identity();
   MAP_BOUND = (MAP>0) ? MAPS[MAP].bound-1 : GROUND-2;
   if(MAP>0){
-    // 테마 맵: 기존 배경 끄고 맵 월드 생성
+    // 테마 맵: 기존 배경 끄고 맵 월드 생성. 볼은 '구멍 메우기'의 파란 볼 사용
     outdoorGroup.visible=false; skyDome.visible=false; roomGroup.visible=false;
     buildMapWorld(MAP);
-    for(let i=0;i<5;i++){ const star=new THREE.Mesh(new THREE.TetrahedronGeometry(0.32), MAT(0xffe066));
-      const d=new THREE.Vector3(rand(-1,1),rand(-1,1),rand(-1,1)).normalize();
-      star.position.copy(d); ballGroup.add(star); stuck.push({grp:star,dir:d}); }
-    refreshBall();
-    ballGroup.visible=true; prince.visible=true; holeGroup.visible=false; blueBall.visible=false;
+    refreshBlue();
+    blueBall.visible=true; ballGroup.visible=false; prince.visible=false; holeGroup.visible=false;
     camera.position.set(0, 5.4, -7.4);
     populateMap(MAP);
     document.getElementById('start').classList.add('hidden');
@@ -1702,6 +1725,13 @@ document.getElementById('mapBtn3').addEventListener('click', ()=> beginRound('ma
 document.getElementById('mapBtn4').addEventListener('click', ()=> beginRound('map4'));
 document.getElementById('mapBtn5').addEventListener('click', ()=> beginRound('map5'));
 document.getElementById('mapBtn6').addEventListener('click', ()=> beginRound('map6'));
+// 일시정지(스탠드얼론 DOM): 임베드(Flutter)에서는 Flutter HUD가 담당
+function pauseGame(){ if(!running||ended) return; running=false; moveVec={x:0,y:0}; endStick(); document.getElementById('pauseVeil').classList.remove('hidden'); }
+function resumeGame(){ if(ended) return; document.getElementById('pauseVeil').classList.add('hidden'); running=true; }
+document.getElementById('pauseBtn').addEventListener('click', pauseGame);
+document.getElementById('pResume').addEventListener('click', resumeGame);
+document.getElementById('pAgain').addEventListener('click', function(){ document.getElementById('pauseVeil').classList.add('hidden'); beginRound(curRound()); });
+document.getElementById('pHome').addEventListener('click', function(){ document.getElementById('pauseVeil').classList.add('hidden'); running=false; showMenu(); });
 document.getElementById('eventToggle').addEventListener('click', function(){
   document.getElementById('eventModes').classList.toggle('hidden');
 });
