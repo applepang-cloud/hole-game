@@ -32,6 +32,9 @@ const kMaps = <GameMode>[
   GameMode('map1', '🛏️', '맵 1 · 내 방', '개미·쥐·고양이를 굴려 납작! 창밖엔 누가…', Color(0xFF7BBF3A)),
   GameMode('map2', '🌳', '맵 2 · 우리 마당', '정원·집·자동차, 구멍에서 유령이…', Color(0xFF3A8F50)),
   GameMode('map3', '🛒', '맵 3 · 대형 마트', '좀비가 구멍에서! 구멍을 메워 막아라', Color(0xFF2A5A9C)),
+  GameMode('map4', '🏫', '맵 4 · 학교', '교실·사물함, 도깨비·해골이 구멍에서', Color(0xFF5AA86A)),
+  GameMode('map5', '🏙️', '맵 5 · 도시 거리', '빌딩·버스·시민, 구멍서 도깨비·유령', Color(0xFF6B7280)),
+  GameMode('map6', '⚰️', '맵 6 · 저승 공동묘지', '묘비·도깨비불, 해골·유령·저승사자', Color(0xFF7A4FB0)),
 ];
 const kEventModes = <GameMode>[
   GameMode('roll', '🟢', '공 굴리기', '끈끈한 공에 물건을 붙여 키운다', Color(0xFF7BBF3A)),

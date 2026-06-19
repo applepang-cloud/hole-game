@@ -162,6 +162,21 @@
           <b>맵 3 · 대형 마트</b>
           <em>좀비가 구멍에서! 구멍을 메워 막아라</em>
         </button>
+        <button class="modebtn" id="mapBtn4">
+          <span class="ic">🏫</span>
+          <b>맵 4 · 학교</b>
+          <em>교실·사물함, 도깨비·해골이 구멍에서</em>
+        </button>
+        <button class="modebtn room" id="mapBtn5">
+          <span class="ic">🏙️</span>
+          <b>맵 5 · 도시 거리</b>
+          <em>빌딩·버스·시민, 구멍서 도깨비·유령</em>
+        </button>
+        <button class="modebtn hole" id="mapBtn6">
+          <span class="ic">⚰️</span>
+          <b>맵 6 · 저승 공동묘지</b>
+          <em>묘비·도깨비불, 해골·유령·저승사자</em>
+        </button>
         <button class="modebtn hole" id="eventToggle" style="opacity:.92">
           <span class="ic">🎪</span>
           <b>이벤트 모드</b>
@@ -863,7 +878,7 @@ function updateSplats(dt){
 }
 
 /* --- 몬스터 이동/충돌 --- */
-const MONSTER_BUILD={ant:buildAnt,rat:buildRat,cat:buildCat,ghost:buildGhost,pumpkin:buildPumpkin,zombie:buildZombie,person:buildPerson};
+const MONSTER_BUILD={ant:buildAnt,rat:buildRat,cat:buildCat,ghost:buildGhost,pumpkin:buildPumpkin,zombie:buildZombie,person:buildPerson,skeleton:buildSkeleton,goblin:buildGoblin,reaper:buildReaper};
 function spawnMonster(kind,x,z,fromHole){
   if(monsters.length>=MONSTER_CAP) return null;
   const grp=(MONSTER_BUILD[kind]||buildAnt)(); const size=grp.userData.size; const baseY=grp.userData.y||0;
@@ -918,11 +933,90 @@ function updateSpawners(dt){
   }
 }
 
+/* --- 맵4~6 추가 몬스터 빌더 --- */
+function buildSkeleton(){ const g=new THREE.Group(); const c=0xe9e6da;
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.46,0.16),MAT(c)); body.position.y=0.55; g.add(body);
+  for(let i=0;i<3;i++){ const rib=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.03,0.18),MAT(0xcfcaba)); rib.position.set(0,0.46+i*0.12,0); g.add(rib); }
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.24,0.22),MAT(c)); head.position.y=0.95; g.add(head);
+  for(const sx of[-1,1]){ const eye=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,0.04),MAT(0x1a1a1a)); eye.position.set(sx*0.06,0.97,0.12); g.add(eye); }
+  for(const sx of[-1,1]){ const arm=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.4,0.05),MAT(c)); arm.position.set(sx*0.2,0.6,0.12); arm.rotation.x=-0.5; g.add(arm); }
+  for(const sx of[-1,1]){ const leg=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.4,0.07),MAT(c)); leg.position.set(sx*0.09,0.2,0); g.add(leg); }
+  addShadow(g,0.3); return tag(g,0.48,0); }
+function buildGoblin(){ const g=new THREE.Group(); const cols=[0xc0392b,0x2e86c1,0x884ea0]; const c=cols[(Math.random()*cols.length)|0];
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.32,10,8),MAT(c)); body.position.y=0.4; body.scale.set(1,0.9,1); g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.24,9,7),MAT(c)); head.position.y=0.78; g.add(head);
+  for(const sx of[-1,1]){ const horn=new THREE.Mesh(new THREE.ConeGeometry(0.06,0.22,5),MAT(0xf5e6c0)); horn.position.set(sx*0.12,1.02,0); horn.rotation.z=sx*0.3; g.add(horn); }
+  for(const sx of[-1,1]){ const eye=new THREE.Mesh(new THREE.SphereGeometry(0.05,6,5),MAT(0xffe833)); eye.position.set(sx*0.1,0.82,0.2); g.add(eye); }
+  const club=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.09,0.5,7),MAT(0x6b4a2a)); club.position.set(0.34,0.55,0.1); club.rotation.z=-0.6; g.add(club);
+  addShadow(g,0.36); return tag(g,0.5,0); }
+function buildReaper(){ const g=new THREE.Group(); const c=0x20202a;
+  const cloak=new THREE.Mesh(new THREE.ConeGeometry(0.4,1.3,10),MAT(c)); cloak.position.y=0.65; g.add(cloak);
+  const hood=new THREE.Mesh(new THREE.SphereGeometry(0.26,9,7,0,Math.PI*2,0,Math.PI*0.65),MAT(c)); hood.position.y=1.2; g.add(hood);
+  const face=new THREE.Mesh(new THREE.CircleGeometry(0.13,10),MAT(0x05050a)); face.position.set(0,1.12,0.2); g.add(face);
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,1.5,6),MAT(0x6b5a3a)); pole.position.set(0.34,0.75,0); g.add(pole);
+  const blade=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.1,0.03),MAT(0xc9d0d6)); blade.position.set(0.5,1.45,0); blade.rotation.z=0.5; g.add(blade);
+  addShadow(g,0.42); return tag(g,0.55,0); }
+
+/* --- 맵4~6 추가 소품 빌더 --- */
+function buildLocker(){ const g=new THREE.Group(); const c=[0x4a86c6,0xc6604a,0x5aa86a][(Math.random()*3)|0];
+  const b=new THREE.Mesh(new THREE.BoxGeometry(0.6,1.5,0.5),MAT(c)); b.position.y=0.75; g.add(b);
+  for(let i=0;i<2;i++){ const ln=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.03,0.02),MAT(0x2a2a2a)); ln.position.set(0,0.75+(i?0.4:-0.4),0.26); g.add(ln); }
+  addShadow(g,0.5); return tag(g,0.6,0); }
+function buildBlackboard(){ const g=new THREE.Group();
+  const board=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.2,0.1),MAT(0x2f5d4a)); board.position.y=1.1; g.add(board);
+  const fr=new THREE.Mesh(new THREE.BoxGeometry(2.4,1.4,0.06),MAT(0xc9a06a)); fr.position.set(0,1.1,-0.03); g.add(fr);
+  for(const sx of[-0.9,0.9]){ const leg=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.5,0.08),MAT(0xc9a06a)); leg.position.set(sx,0.25,0); g.add(leg); }
+  addShadow(g,1.2); return tag(g,1.1,0); }
+function buildBasketball(){ const g=new THREE.Group();
+  const b=new THREE.Mesh(new THREE.SphereGeometry(0.22,12,9),MAT(0xe07a2a)); b.position.y=0.22; g.add(b);
+  return tag(g,0.23,0.22); }
+function buildLunchTray(){ const g=new THREE.Group();
+  const t=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.05,0.3),MAT(0xd8d8dc)); t.position.y=0.05; g.add(t);
+  for(const p of[[-0.1,-0.07,0xffd24a],[0.1,-0.07,0xe2503b],[0,0.08,0xfdfbf5]]){ const f=new THREE.Mesh(new THREE.SphereGeometry(0.06,7,5),MAT(p[2])); f.position.set(p[0],0.1,p[1]); f.scale.y=0.6; g.add(f); }
+  return tag(g,0.26,0.05); }
+function buildBuilding(){ const g=new THREE.Group(); const cols=[0xb9c4cf,0xc9b8a0,0xa9b0c0,0xd0c0b0];
+  const c=cols[(Math.random()*cols.length)|0]; const h=rand(3.2,5.2);
+  const b=new THREE.Mesh(new THREE.BoxGeometry(2.2,h,2.2),MAT(c)); b.position.y=h/2; g.add(b);
+  const rows=Math.floor(h/0.8);
+  for(let r=0;r<rows;r++) for(let cc=0;cc<3;cc++){ const w=new THREE.Mesh(new THREE.PlaneGeometry(0.4,0.5),new THREE.MeshBasicMaterial({color:Math.random()<0.5?0xbfe6ff:0x3a4452})); w.position.set(-0.6+cc*0.6,0.7+r*0.8,1.11); g.add(w); }
+  addShadow(g,1.6); return tag(g,1.8,0); }
+function buildBus(){ const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(2.8,1.0,1.0),MAT(0xf5b800)); body.position.y=0.7; g.add(body);
+  const win=new THREE.Mesh(new THREE.BoxGeometry(2.7,0.4,1.02),MAT(0xbfe6ff)); win.position.y=0.95; g.add(win);
+  for(const sx of[-1,1]) for(const sz of[-0.45,0.45]){ const w=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.22,0.16,10),MAT(0x222222)); w.rotation.x=Math.PI/2; w.position.set(sx,0.24,sz); g.add(w); }
+  addShadow(g,1.5); return tag(g,1.6,0); }
+function buildTrafficLight(){ const g=new THREE.Group();
+  const post=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.07,1.8,7),MAT(0x4a505a)); post.position.y=0.9; g.add(post);
+  const box=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.6,0.2),MAT(0x33373d)); box.position.y=1.9; g.add(box);
+  const cc=[0xff4040,0xffd24a,0x4ad06a]; for(let i=0;i<3;i++){ const l=new THREE.Mesh(new THREE.SphereGeometry(0.07,8,6),MAT(cc[i])); l.position.set(0,2.1-i*0.2,0.11); g.add(l); }
+  addShadow(g,0.3); return tag(g,0.4,0); }
+function buildBench(){ const g=new THREE.Group();
+  const seat=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.08,0.4),MAT(0xa86a3a)); seat.position.y=0.4; g.add(seat);
+  const back=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.4,0.08),MAT(0xa86a3a)); back.position.set(0,0.62,-0.16); g.add(back);
+  for(const sx of[-0.5,0.5]){ const l=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.4,0.36),MAT(0x6b6b6b)); l.position.set(sx,0.2,0); g.add(l); }
+  addShadow(g,0.6); return tag(g,0.6,0); }
+function buildGravestone(){ const g=new THREE.Group();
+  const b=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.7,0.14),MAT(0x9aa0a6)); b.position.y=0.45; g.add(b);
+  const top=new THREE.Mesh(new THREE.CylinderGeometry(0.25,0.25,0.14,12,1,false,0,Math.PI),MAT(0x9aa0a6)); top.rotation.z=-Math.PI/2; top.rotation.y=Math.PI/2; top.position.y=0.8; g.add(top);
+  const base=new THREE.Mesh(new THREE.BoxGeometry(0.66,0.16,0.3),MAT(0x7a8086)); base.position.y=0.08; g.add(base);
+  addShadow(g,0.4); return tag(g,0.4,0); }
+function buildDeadTree(){ const g=new THREE.Group();
+  const tr=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.22,1.6,7),MAT(0x4a3a2a)); tr.position.y=0.8; g.add(tr);
+  for(let i=0;i<4;i++){ const a=i/4*Math.PI*2; const br=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.08,0.7,5),MAT(0x4a3a2a)); br.position.set(Math.cos(a)*0.2,1.4,Math.sin(a)*0.2); br.rotation.set(Math.cos(a)*0.8,0,Math.sin(a)*0.8); g.add(br); }
+  addShadow(g,0.5); return tag(g,0.7,0); }
+function buildTorch(){ const g=new THREE.Group();
+  const post=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.06,1.2,6),MAT(0x3a3a44)); post.position.y=0.6; g.add(post);
+  const flame=new THREE.Mesh(new THREE.ConeGeometry(0.14,0.34,7),new THREE.MeshBasicMaterial({color:0x7af0d0})); flame.position.y=1.35; g.add(flame); // 도깨비불(청록)
+  addShadow(g,0.2); return tag(g,0.28,0); }
+
 /* --- 맵 환경 + 배치 --- */
 const MAPS={
   1:{ name:'내 방', bound:26, indoor:true, floor:0xe7c9a0, line:0xcdab7e, wall:0xc7d8e8, wallH:7 },
-  2:{ name:'우리 마당', bound:58, indoor:false },
+  2:{ name:'우리 마당', bound:58, indoor:false, sky:0xa9def7, ground:0x83cf4e, road:0xcaba8e },
   3:{ name:'대형 마트', bound:40, indoor:true, floor:0xeaecee, line:0xc8ccd0, wall:0xd6dde4, wallH:8 },
+  4:{ name:'학교', bound:34, indoor:true, floor:0xd8cdb8, line:0xc2b596, wall:0xcfe0d2, wallH:8 },
+  5:{ name:'도시 거리', bound:62, indoor:false, sky:0xcdd6e0, ground:0x8a8f96, road:0x44474d },
+  6:{ name:'저승 공동묘지', bound:56, indoor:false, sky:0x2a2740, ground:0x3a4a3f, road:0x2e2a3a },
 };
 function buildMapWorld(id){
   if(mapGroup) scene.remove(mapGroup);
@@ -942,14 +1036,17 @@ function buildMapWorld(id){
       windowGhost=buildWindowGhost(); windowGhost.position.set(0,3.4,-H+0.5); mapGroup.add(windowGhost);
     }
   } else {
-    const dome=new THREE.Mesh(new THREE.SphereGeometry(H+60,18,12),new THREE.MeshBasicMaterial({color:0xa9def7,side:THREE.BackSide,fog:false})); mapGroup.add(dome);
-    const ground=new THREE.Mesh(new THREE.CircleGeometry(H+30,44),MAT(0x83cf4e,false)); ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; mapGroup.add(ground);
-    const road=new THREE.Mesh(new THREE.PlaneGeometry(H*2.2,8),MAT(0xcaba8e,false)); road.rotation.x=-Math.PI/2; road.position.set(0,0.02,0); mapGroup.add(road);
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(H+60,18,12),new THREE.MeshBasicMaterial({color:cfg.sky||0xa9def7,side:THREE.BackSide,fog:false})); mapGroup.add(dome);
+    const ground=new THREE.Mesh(new THREE.CircleGeometry(H+30,44),MAT(cfg.ground||0x83cf4e,false)); ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; mapGroup.add(ground);
+    const road=new THREE.Mesh(new THREE.PlaneGeometry(H*2.2,8),MAT(cfg.road||0xcaba8e,false)); road.rotation.x=-Math.PI/2; road.position.set(0,0.02,0); mapGroup.add(road);
+    if(id===6){ // 저승: 도깨비불 + 으스스 안개 느낌 둥근 달
+      const moon=new THREE.Mesh(new THREE.CircleGeometry(7,20),new THREE.MeshBasicMaterial({color:0xdfe6c0,fog:false})); moon.position.set(-H*0.3,H*0.7,-H-20); mapGroup.add(moon);
+    }
   }
 }
 function populateMap(id){
   const cfg=MAPS[id], H=cfg.bound-2;
-  const smallN = id===1?40 : id===2?56 : 36;
+  const smallN = id===1?40 : id===2?56 : id===5?58 : id===6?40 : 36;
   for(let i=0;i<smallN;i++){ const mk=SMALL_MAKERS[(Math.random()*SMALL_MAKERS.length)|0]; addProp(mk(), rand(-H,H), rand(-H,H)); }
   if(id===1){
     addFlat(buildBed(), -H*0.55, -H*0.5);
@@ -978,13 +1075,48 @@ function populateMap(id){
     // 바닥 구멍: 작은 건 메우고, 큰 건 빠진다(유령·호박이 솟아남)
     for(let i=0;i<3;i++) addSpawner(rand(-H,H), rand(-H,H), rand(0.4,0.6), null, 0);
     for(let i=0;i<5;i++) addSpawner(rand(-H*0.8,H*0.8), rand(-H*0.8,H*0.8), rand(0.9,1.5), i%2?'ghost':'pumpkin', rand(3,5));
-  } else {
+  } else if(id===3){
     for(let i=0;i<8;i++) addFlat(buildShelf(), rand(-H,H), rand(-H,H));
     for(let i=0;i<6;i++) addFlat(buildCart(), rand(-H,H), rand(-H,H));
     for(let i=0;i<3;i++) addFlat(buildFreezer(), rand(-H,H), rand(-H,H));
     // 바닥 구멍: 작은 건 메우고, 큰 건 빠진다(좀비가 계속 올라옴)
     for(let i=0;i<4;i++) addSpawner(rand(-H,H), rand(-H,H), rand(0.4,0.6), null, 0);
     for(let i=0;i<5;i++) addSpawner(rand(-H*0.8,H*0.8), rand(-H*0.8,H*0.8), rand(1.0,1.6), 'zombie', rand(2.5,4));
+  } else if(id===4){
+    // 학교: 책상·의자·사물함·칠판·책더미·농구공·급식판
+    for(let i=0;i<6;i++) addFlat(buildDesk(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<6;i++) addFlat(buildChair(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<5;i++) addFlat(buildLocker(), rand(-H,H), -H+rand(0,3));
+    addFlat(buildBlackboard(), 0, -H+1);
+    for(let i=0;i<6;i++) addFlat(buildBookStack(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<6;i++) addProp(buildBasketball(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<6;i++) addProp(buildLunchTray(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<3;i++) spawnMonster('goblin', rand(-H,H), rand(-H,H), false);
+    for(let i=0;i<3;i++) spawnMonster('skeleton', rand(-H,H), rand(-H,H), false);
+    for(let i=0;i<3;i++) addSpawner(rand(-H,H), rand(-H,H), rand(0.4,0.6), null, 0);
+    for(let i=0;i<5;i++) addSpawner(rand(-H*0.8,H*0.8), rand(-H*0.8,H*0.8), rand(0.9,1.5), i%2?'skeleton':'goblin', rand(2.8,4.2));
+  } else if(id===5){
+    // 도시 거리: 빌딩·버스·자동차·신호등·벤치·가로등·우체통 + 시민
+    for(let i=0;i<7;i++) addFlat(buildBuilding(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<4;i++) addFlat(buildCar(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<2;i++) addFlat(buildBus(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<4;i++) addFlat(buildTrafficLight(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<5;i++) addFlat(buildBench(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<5;i++) addFlat(buildLamp(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<3;i++) addFlat(buildMailbox(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<6;i++) spawnMonster('person', rand(-H,H), rand(-H,H), false);
+    for(let i=0;i<3;i++) addSpawner(rand(-H,H), rand(-H,H), rand(0.4,0.6), null, 0);
+    for(let i=0;i<6;i++) addSpawner(rand(-H*0.8,H*0.8), rand(-H*0.8,H*0.8), rand(1.0,1.6), i%2?'goblin':'ghost', rand(2.6,4));
+  } else {
+    // 저승 공동묘지: 묘비·고목·도깨비불·벤치 + 해골·유령·저승사자
+    for(let i=0;i<10;i++) addFlat(buildGravestone(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<6;i++) addFlat(buildDeadTree(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<8;i++) addFlat(buildTorch(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<4;i++) spawnMonster('skeleton', rand(-H,H), rand(-H,H), false);
+    for(let i=0;i<3;i++) spawnMonster('ghost', rand(-H,H), rand(-H,H), false);
+    for(let i=0;i<2;i++) spawnMonster('reaper', rand(-H,H), rand(-H,H), false);
+    for(let i=0;i<3;i++) addSpawner(rand(-H,H), rand(-H,H), rand(0.4,0.6), null, 0);
+    for(let i=0;i<6;i++){ const k=['skeleton','ghost','reaper'][i%3]; addSpawner(rand(-H*0.8,H*0.8), rand(-H*0.8,H*0.8), rand(1.0,1.7), k, rand(2.4,3.8)); }
   }
 }
 function updateMapExtras(dt){
@@ -1479,7 +1611,7 @@ function clearWorld(){
 }
 function beginRound(mode){
   // 맵 모드(map1/2/3) → 롤 메커니즘 + 테마 레벨
-  let mapId=0; const mm=/^map([123])$/.exec(mode||'');
+  let mapId=0; const mm=/^map([1-6])$/.exec(mode||'');
   if(mm){ mapId=+mm[1]; mode='roll'; }
   MAP = mapId; MODE = mode;
   clearWorld();
@@ -1567,6 +1699,9 @@ document.getElementById('modeHole').addEventListener('click', ()=> beginRound('h
 document.getElementById('mapBtn1').addEventListener('click', ()=> beginRound('map1'));
 document.getElementById('mapBtn2').addEventListener('click', ()=> beginRound('map2'));
 document.getElementById('mapBtn3').addEventListener('click', ()=> beginRound('map3'));
+document.getElementById('mapBtn4').addEventListener('click', ()=> beginRound('map4'));
+document.getElementById('mapBtn5').addEventListener('click', ()=> beginRound('map5'));
+document.getElementById('mapBtn6').addEventListener('click', ()=> beginRound('map6'));
 document.getElementById('eventToggle').addEventListener('click', function(){
   document.getElementById('eventModes').classList.toggle('hidden');
 });
@@ -1612,7 +1747,7 @@ requestAnimationFrame(loop);
   var MODEMAP = { roll:'modeRoll', hole:'modeHole', room:'modeRoom' };
   function startMode(mode){
     // 맵 모드(map1/2/3)는 엔진을 직접 호출
-    if(/^map[123]$/.test(mode)){
+    if(/^map[1-6]$/.test(mode)){
       if(window.__holeEngine && window.__holeEngine.start){ window.__holeEngine.start(mode); post({type:'start', mode:mode}); }
       return;
     }
@@ -1642,7 +1777,7 @@ requestAnimationFrame(loop);
   // ?mode= 자동 시작
   try{
     var m = new URLSearchParams(location.search).get('mode');
-    if(m && (MODEMAP[m] || /^map[123]$/.test(m))) startMode(m);
+    if(m && (MODEMAP[m] || /^map[1-6]$/.test(m))) startMode(m);
   }catch(e){}
 
   // Flutter → 게임 명령 수신 (엔드카드 "다시 하기" / 모드 전환)
