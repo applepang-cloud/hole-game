@@ -56,8 +56,10 @@
 
   .hpwrap{ position:absolute; left:10px; bottom:16px; display:flex; align-items:center; gap:6px; width:168px; z-index:5; }
   .hpwrap .hpico{ font-size:15px; filter:drop-shadow(0 1px 1px #0006); }
-  .hpbar{ flex:1; height:13px; background:#00000055; border:2px solid #fff; border-radius:10px; overflow:hidden; box-shadow:0 2px 0 #0003; }
+  .hpbar{ flex:1; position:relative; height:15px; background:#00000055; border:2px solid #fff; border-radius:10px; overflow:hidden; box-shadow:0 2px 0 #0003; }
   .hpbar > i{ display:block; height:100%; width:100%; background:#4ad06a; transition:width .2s ease, background .2s; }
+  .hpbar .hpnum{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:10px; font-weight:800; color:#fff; text-shadow:0 1px 2px #000a; }
   #pauseBtn{ position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:6;
     width:42px; height:42px; border-radius:50%; border:3px solid #fff; background:var(--cream);
     box-shadow:0 4px 0 #d8c39a; font-size:17px; cursor:pointer; color:var(--ink); pointer-events:auto; }
@@ -140,7 +142,7 @@
       </div>
       <div class="hpwrap" id="hpWrap" style="display:none">
         <span class="hpico">❤️</span>
-        <div class="hpbar"><i id="hpFill"></i></div>
+        <div class="hpbar"><i id="hpFill"></i><span class="hpnum" id="hpNum">300</span></div>
       </div>
     </div>
 
@@ -954,7 +956,7 @@ function updateMonsters(dt){
     m.grp.position.set(nx, m.baseY+floatY+climbY, nz); m.grp.rotation.y=m.dir;
     const d=Math.hypot(m.x-ball.x,m.z-ball.z), reach=ball.r+m.size*0.7+0.05;
     if(m.climb<=0){
-      if(d<reach && ball.r>=m.size*FLATTEN_RATIO){ monsters.splice(i,1); squash(m.grp,m.x,m.z,m.size,0.5); continue; } // 깔아뭉갬
+      if(d<reach && ball.r>=m.size*FLATTEN_RATIO){ monsters.splice(i,1); squash(m.grp,m.x,m.z,m.size,0.5); SFX.scream(); continue; } // 깔아뭉갬 → 으악!
       if(d<reach+0.6 && m.atkCd<=0){ damage(monDmg(m.kind), m.x, m.z); m.atkCd=1.5; } // 공격
     }
   }
@@ -1577,6 +1579,7 @@ const SFX={
   win(){ [523,659,784,1047,1318].forEach((f,i)=>setTimeout(()=>tone(f,0.16,'triangle',0.22),i*90)); },
   lose(){ [392,330,262].forEach((f,i)=>setTimeout(()=>tone(f,0.22,'sawtooth',0.18,f*0.7),i*150)); },
   loot(){ tone(880,0.06,'triangle',0.16); setTimeout(()=>tone(1245,0.10,'triangle',0.16),60); },
+  scream(){ const b=300+Math.random()*140; tone(b,0.2,'sawtooth',0.22,b*0.32); tone(b*1.9,0.12,'square',0.09,b*0.5); }, // 으악!
 };
 const MEL=[0,4,7,4, 9,7,4,0, 5,9,5,2, 7,4,7,11];
 const BASS=[0,0,5,5, 7,7,2,2];
@@ -1666,7 +1669,8 @@ function updateHUD(){
   const hw=document.getElementById('hpWrap');
   if(hw){ hw.style.display = MAP>0?'flex':'none';
     if(MAP>0){ const p=Math.max(0,ball.hpMax?ball.hp/ball.hpMax:1); const f=document.getElementById('hpFill');
-      f.style.width=(p*100)+'%'; f.style.background = p<0.3?'#ff3b3b':p<0.6?'#ffb13a':'#4ad06a'; } }
+      f.style.width=(p*100)+'%'; f.style.background = p<0.3?'#ff3b3b':p<0.6?'#ffb13a':'#4ad06a';
+      document.getElementById('hpNum').textContent = Math.ceil(ball.hp)+' / '+ball.hpMax; } }
   if(MAP>0){
     const remaining=spawners.length, cleared=holeTotal-remaining;
     document.getElementById('cnt').textContent = remaining;
@@ -1763,7 +1767,7 @@ function beginRound(mode){
   if(mm){ mapId=+mm[1]; mode='roll'; }
   MAP = mapId; MODE = mode;
   clearWorld();
-  ball = { x:0, z:0, r:START_R, vol:0, area:Math.PI*START_R*START_R, heading:0, score:0, hp:100, hpMax:100 };
+  ball = { x:0, z:0, r:START_R, vol:0, area:Math.PI*START_R*START_R, heading:0, score:0, hp:300, hpMax:300 };
   camYaw = 0;
   ballGroup.quaternion.identity();
   MAP_BOUND = (MAP>0) ? MAPS[MAP].bound-1 : GROUND-2;

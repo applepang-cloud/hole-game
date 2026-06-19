@@ -313,27 +313,41 @@ class _HudOverlay extends StatelessWidget {
   Widget _hpBar() {
     final p = ((state['hpPct'] as num?)?.toDouble() ?? 1).clamp(0.0, 1.0);
     final col = p < 0.3 ? const Color(0xFFFF3B3B) : p < 0.6 ? const Color(0xFFFFB13A) : const Color(0xFF4AD06A);
+    final hp = (state['hp'] as num?)?.toInt() ?? 0;
+    final hpMax = (state['hpMax'] as num?)?.toInt() ?? 0;
     return SizedBox(
-      width: 168,
+      width: 178,
       child: Row(
         children: [
           const Text('❤️', style: TextStyle(fontSize: 15)),
           const SizedBox(width: 6),
           Expanded(
             child: Container(
-              height: 13,
+              height: 15,
               decoration: BoxDecoration(
                 color: const Color(0x55000000),
                 border: Border.all(color: Colors.white, width: 2),
                 borderRadius: BorderRadius.circular(10),
               ),
               clipBehavior: Clip.antiAlias,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: FractionallySizedBox(
-                  widthFactor: p == 0 ? 0.001 : p,
-                  child: DecoratedBox(decoration: BoxDecoration(color: col)),
-                ),
+              child: Stack(
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: p == 0 ? 0.001 : p,
+                      child: DecoratedBox(decoration: BoxDecoration(color: col)),
+                    ),
+                  ),
+                  Center(
+                    child: Text('$hp / $hpMax',
+                        style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            shadows: [Shadow(color: Color(0xAA000000), blurRadius: 2)])),
+                  ),
+                ],
               ),
             ),
           ),
