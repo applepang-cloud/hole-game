@@ -55,13 +55,20 @@
       var back  = document.getElementById('holeBack');
       var SRC = 'game/index.html';
       function notify(type){ if(typeof window.__holeOnGameMsg==='function') window.__holeOnGameMsg(JSON.stringify({hole:true,type:type})); }
-      // Flutter(Dart)에서 호출 — 게임 표시
+      // Flutter(Dart)에서 호출 — 게임 표시 + 해당 모드로 시작
       window.holeShowGame = function(mode){
-        if(!frame.src){ frame.src = SRC + (mode ? ('?mode='+mode) : ''); }
+        mode = mode || 'roll';
+        if(!frame.src){
+          frame.src = SRC + '?mode=' + mode;            // 최초 로드 → 게임이 자동 시작
+        } else if(frame.contentWindow){
+          frame.contentWindow.postMessage({holeCmd:'restart', mode:mode}, '*');  // 재사용 → 재시작
+        }
         frame.classList.add('show'); back.classList.add('show');
       };
-      // Flutter에서 호출 — 게임 숨김(홈 복귀)
+      // Flutter에서 호출 — 게임 숨김(홈/엔드카드 복귀)
       window.holeHideGame = function(){ frame.classList.remove('show'); back.classList.remove('show'); };
+      // Flutter에서 호출 — 엔드카드 "다시 하기"(같은 모드 재시작)
+      window.holeRestart = function(mode){ window.holeShowGame(mode); };
       back.addEventListener('click', function(){ window.holeHideGame(); notify('home'); });
       // 게임 → Flutter 메시지 중계 (Dart가 window.__holeOnGameMsg 등록)
       window.addEventListener('message', function(e){

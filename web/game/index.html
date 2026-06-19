@@ -1194,6 +1194,8 @@ function finish(win, reason){
   ended=true; running=false; endStick();
   EMIT({ type:'over', win:!!win, mode:MODE, size:fmtSizePlain(ball.r), sizeCm:Math.round(ball.r*100),
     count: MODE==='room'? (roomTotal-holes.length) : ball.score, roomTotal:roomTotal, reason:reason||'' });
+  // Flutter 임베드 시 엔드카드는 Flutter가 표시 → 인게임 DOM 엔드카드는 생략(효과음만)
+  if(window.__HOLE_EMBEDDED){ win? SFX.win() : SFX.lose(); return; }
   const roll=MODE==='roll', room=MODE==='room';
   setTimeout(()=>{
     document.getElementById('endTitle').textContent = win? (room?'클리어! 🎉':'목표 달성! 🎉') : (reason||'시간 종료!');
@@ -1255,23 +1257,35 @@ requestAnimationFrame(loop);
 })();
 </script>
 <script>
-/* Flutter 셸 연동: ?mode= 자동시작 + 종료 시 부모(Flutter)로 postMessage */
+/* Flutter 셸 연동: ?mode= 자동시작 + 임베드 시 인게임 메뉴/엔드카드 숨김 + 부모(Flutter) 재시작 명령 수신 */
 (function(){
-  function post(o){ try{ if(window.parent && window.parent!==window) window.parent.postMessage(Object.assign({hole:true},o), '*'); }catch(e){} }
+  var EMBEDDED = false;
+  try { EMBEDDED = (window.parent && window.parent !== window); } catch(e){ EMBEDDED = true; }
+  window.__HOLE_EMBEDDED = EMBEDDED;
+  function post(o){ try{ if(EMBEDDED) window.parent.postMessage(Object.assign({hole:true},o), '*'); }catch(e){} }
+  var MODEMAP = { roll:'modeRoll', hole:'modeHole', room:'modeRoom' };
+  function startMode(mode){
+    var btn = document.getElementById(MODEMAP[mode] || 'modeRoll');
+    if(btn){ btn.click(); post({type:'start', mode:mode}); }
+  }
+
+  // 임베드되면 모드선택(start)·엔드카드(end) 베일은 Flutter가 담당 → DOM 베일 숨김
+  if(EMBEDDED){
+    var s=document.getElementById('start'); if(s) s.classList.add('hidden');
+    var e0=document.getElementById('end'); if(e0) e0.classList.add('hidden');
+  }
+
+  // ?mode= 자동 시작
   try{
     var m = new URLSearchParams(location.search).get('mode');
-    var map = { roll:'modeRoll', hole:'modeHole', room:'modeRoom' };
-    if(m && map[m]){ var b=document.getElementById(map[m]); if(b){ b.click(); post({type:'start',mode:m}); } }
+    if(m && MODEMAP[m]) startMode(m);
   }catch(e){}
-  var end = document.getElementById('end');
-  if(end){
-    new MutationObserver(function(){
-      if(!end.classList.contains('hidden')){
-        var t=(document.getElementById('endTitle')||{}).textContent||'';
-        post({ type:'end', title:t, win: /달성|완성|클리어/.test(t) });
-      }
-    }).observe(end, { attributes:true, attributeFilter:['class'] });
-  }
+
+  // Flutter → 게임 명령 수신 (엔드카드 "다시 하기" / 모드 전환)
+  window.addEventListener('message', function(ev){
+    var d = ev.data;
+    if(d && typeof d==='object' && d.holeCmd==='restart'){ startMode(d.mode || 'roll'); }
+  });
 })();
 </script>
 </body>
