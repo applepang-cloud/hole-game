@@ -528,7 +528,16 @@ function buildHoleMesh(r){
   const inner=new THREE.Mesh(new THREE.RingGeometry(0.66,1.0,40),
     new THREE.MeshBasicMaterial({color:0x141019, transparent:true, opacity:0.6})); inner.rotation.x=-Math.PI/2; inner.position.y=0.06; g.add(inner);
   g.scale.setScalar(r); g.position.set(0,0,0);
+  g.userData.rimMat=rim.material; g.userData.diskMat=disk.material; g.userData.innerMat=inner.material;
+  g.userData.danger=null;
   return g;
+}
+// 구멍 색: 메울 수 있으면 보라빛, 빠지는 구멍이면 검정
+function setHoleColor(grp, danger){
+  if(grp.userData.danger===danger) return;
+  grp.userData.danger=danger;
+  if(danger){ grp.userData.rimMat.color.setHex(0x241c2c); grp.userData.diskMat.color.setHex(0x05060a); grp.userData.innerMat.color.setHex(0x141019); }
+  else { grp.userData.rimMat.color.setHex(0x9a5ce0); grp.userData.diskMat.color.setHex(0x3a1a60); grp.userData.innerMat.color.setHex(0x6a36a8); }
 }
 function refreshBlue(){
   ball.r = START_R * Math.cbrt(1 + ball.vol);
@@ -770,7 +779,7 @@ function populate(){
 }
 
 /* ===================== 맵(테마 레벨) 시스템 ===================== */
-let MAP=0, MAP_BOUND=GROUND-2, mapGroup=null, windowGhost=null, ambT=0, ballSink=null;
+let MAP=0, MAP_BOUND=GROUND-2, mapGroup=null, windowGhost=null, ambT=0, ballSink=null, holeTotal=0;
 let monsters=[], splats=[], spawners=[];
 const MONSTER_CAP=34, FLATTEN_RATIO=0.8;
 
@@ -887,18 +896,18 @@ function addFlat(grp,x,z,sc){
 }
 function squash(grp,x,z,size,growK){
   splats.push({ grp, t:0, dur:0.30 });
-  ball.vol += Math.pow(size,3)*ABSORB*(growK==null?0.7:growK);
+  // 일반 물체 깔아뭉개기 → 크기 조금만 증가
+  ball.vol += Math.pow(size,3)*ABSORB*(growK==null?0.35:growK);
   ball.score++; refreshActive(); SFX.pop(ball.score); updateHUD();
-  if(ball.r>=goalR() && !ended) finish(true);
 }
 /* 맵: 작은 물건은 파란 볼 밑으로 빨려들어 사라지며 성장(붙지 않음) */
 function mapSwallow(item){
   loose.splice(loose.indexOf(item),1);
   falling.push({ grp:item.grp, x0:item.x, z0:item.z, y0:(item.y||0.15)+0.1, t:0, dur:0.4,
     spin:rand(4,9), tilt:rand(3,7), toY:Math.max(0.3,ball.r*0.5) });
-  ball.vol += Math.pow(item.size,3)*ABSORB; ball.score++;
+  // 일반 물건 빨아들이기 → 크기 조금만 증가
+  ball.vol += Math.pow(item.size,3)*ABSORB*0.4; ball.score++;
   refreshBlue(); SFX.pop(ball.score); updateHUD();
-  if(ball.r>=goalR() && !ended) finish(true);
 }
 function updateSplats(dt){
   for(let i=splats.length-1;i>=0;i--){ const s=splats[i]; s.t+=dt; const t=Math.min(1,s.t/s.dur);
@@ -929,7 +938,7 @@ function updateMonsters(dt){
     m.grp.position.set(nx, m.baseY+floatY+climbY, nz); m.grp.rotation.y=m.dir;
     const d=Math.hypot(m.x-ball.x,m.z-ball.z), reach=ball.r+m.size*0.7+0.05;
     if(d<reach && m.climb<=0){
-      if(ball.r>=m.size*FLATTEN_RATIO){ monsters.splice(i,1); squash(m.grp,m.x,m.z,m.size,0.85); }
+      if(ball.r>=m.size*FLATTEN_RATIO){ monsters.splice(i,1); squash(m.grp,m.x,m.z,m.size,0.5); }
       else { const ux=(ball.x-m.x)/(d||1),uz=(ball.z-m.z)/(d||1); ball.x=m.x+ux*reach; ball.z=m.z+uz*reach; }
     }
   }
@@ -948,11 +957,15 @@ function fallInRoll(s){
 function updateSpawners(dt){
   for(let i=spawners.length-1;i>=0;i--){ const s=spawners[i];
     const d=Math.hypot(s.x-ball.x,s.z-ball.z);
-    if(ball.r >= s.r*0.92){
-      // 내가 더 크다 → 덮어서 메움(성장)
+    const canFill = ball.r >= s.r*0.92;
+    setHoleColor(s.grp, !canFill);   // 메울 수 있으면 보라, 빠지는 구멍이면 검정
+    if(canFill){
+      // 내가 더 크다 → 덮어서 메움 (크게 성장!)
       if(d < ball.r*0.85){
         spawnPuff(s.x,s.z); spawnPuff(s.x,s.z); scene.remove(s.grp); spawners.splice(i,1);
-        ball.vol += s.r*s.r*s.r*1.3; ball.score++; refreshActive(); SFX.loot(); updateHUD(); continue;
+        ball.vol += (0.8 + s.r*s.r*s.r)*3.5; ball.score++; refreshActive(); SFX.loot(); updateHUD();
+        if(spawners.length===0 && !ended) finish(true);   // 모든 구멍 제거 → 클리어
+        continue;
       }
     } else {
       // 구멍이 나보다 크다 → 중심에 깊이 들어가면 빠진다(실패)
@@ -1343,7 +1356,7 @@ function updateAbsorb(dt){
     if(d < reach){
       if(it.kind==='flat'){
         // 가구/큰 사물 → 충분히 크면 납작(squash)→펑, 아니면 벽
-        if(r >= it.size*FLATTEN_RATIO){ loose.splice(i,1); squash(it.grp,it.x,it.z,it.size,0.8); }
+        if(r >= it.size*FLATTEN_RATIO){ loose.splice(i,1); squash(it.grp,it.x,it.z,it.size,0.45); }
         else { const nx=(ball.x-it.x)/(d||1), nz=(ball.z-it.z)/(d||1); ball.x=it.x+nx*reach; ball.z=it.z+nz*reach; }
       } else if(it.size <= r*PICK_RATIO){ MAP>0 ? mapSwallow(it) : collect(it); }
       else {
@@ -1483,15 +1496,18 @@ let _lastSec=-1;
 function EMIT(o){ try{ if(window.parent && window.parent!==window) window.parent.postMessage(Object.assign({hole:true},o),'*'); }catch(e){} }
 function fmtTime(t){ const m=Math.floor(t/60), s=Math.floor(t%60); return m+':'+String(s).padStart(2,'0'); }
 function emitState(){
-  const goalPct = MODE==='room'
-    ? (roomTotal? (roomTotal-holes.length)/roomTotal : 0)
-    : clamp((ball.r-START_R)/(goalR()-START_R),0,1);
+  const isMap = MAP>0, remain = spawners.length;
+  const goalPct = isMap
+    ? (holeTotal? (holeTotal-remain)/holeTotal : 0)
+    : MODE==='room'
+      ? (roomTotal? (roomTotal-holes.length)/roomTotal : 0)
+      : clamp((ball.r-START_R)/(goalR()-START_R),0,1);
   EMIT({ type:'state', mode:MODE,
     size: fmtSizePlain(ball.r), sizeCm: Math.round(ball.r*100),
-    count: MODE==='room'? holes.length : ball.score,
-    countLabel: MODE==='hole'?'빨아들인':MODE==='room'?'남은 구멍':'모은 물건',
+    count: isMap? remain : (MODE==='room'? holes.length : ball.score),
+    countLabel: (isMap||MODE==='room')?'남은 구멍':MODE==='hole'?'빨아들인':'모은 물건',
     goalPct: goalPct,
-    goalText: MODE==='room' ? (holes.length? ('남은 구멍 '+holes.length+'개'):'모든 구멍 제거!')
+    goalText: (isMap||MODE==='room') ? (remain||holes.length? ('남은 구멍 '+(isMap?remain:holes.length)+'개'):'모든 구멍 제거!')
               : (goalPct>=1?'목표 달성!':'목표 '+fmtSizePlain(goalR())),
     timeLeft: Math.max(0,Math.ceil(timeLeft)), mmss: fmtTime(Math.max(0,timeLeft)), warn: timeLeft<=15 });
 }
@@ -1521,6 +1537,8 @@ window.__HOLE = {
   step(dt){ dt=dt||0.05; if(running&&!ended){ if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0) updateMapExtras(dt); } } updateSplats(dt); },
   warp(r){ ball.vol=Math.pow(r/START_R,3)-1; refreshActive(); },  // 공 크기 강제(테스트)
   get paused(){ return !running && !ended; },
+  get holeTotal(){ return holeTotal; },
+  holeColors(){ return spawners.map(function(s){ return {r:Math.round(s.r*100)/100, danger:s.grp.userData.danger}; }); },
   fallTest(){   // 나보다 큰 구멍으로 이동 후 1스텝 → 빠짐(finish) 발동 확인
     let s=null; for(const sp of spawners){ if(sp.r>ball.r){ s=sp; break; } }
     if(!s) return JSON.stringify({err:'no bigger hole', ballR:ball.r});
@@ -1538,7 +1556,13 @@ function fmtSizePlain(r){ const cm=Math.round(r*100);
   return cm<100? cm+'cm' : Math.floor(cm/100)+'m '+(cm%100)+'cm'; }
 function updateHUD(){
   document.getElementById('sizeVal').innerHTML = fmtSize(ball.r);
-  if(MODE==='room'){
+  if(MAP>0){
+    const remaining=spawners.length, cleared=holeTotal-remaining;
+    document.getElementById('cnt').textContent = remaining;
+    const prog = holeTotal? cleared/holeTotal : 0;
+    document.getElementById('goalFill').style.width=(prog*100)+'%';
+    document.getElementById('goalTxt').textContent = remaining? ('남은 구멍 '+remaining+'개') : '모든 구멍 제거!';
+  } else if(MODE==='room'){
     const remaining=holes.length, cleared=roomTotal-remaining;
     document.getElementById('cnt').textContent = remaining;
     const prog = roomTotal? cleared/roomTotal : 0;
@@ -1554,7 +1578,7 @@ function updateHUD(){
 }
 function updateModeUI(){
   document.getElementById('cntLabel').textContent =
-    MODE==='hole' ? '빨아들인' : MODE==='room' ? '남은 구멍' : '모은 물건';
+    MAP>0 ? '남은 구멍' : MODE==='hole' ? '빨아들인' : MODE==='room' ? '남은 구멍' : '모은 물건';
 }
 function updateTime(){
   const m=Math.floor(timeLeft/60), s=Math.floor(timeLeft%60);
@@ -1637,6 +1661,7 @@ function beginRound(mode){
     blueBall.visible=true; ballGroup.visible=false; prince.visible=false; holeGroup.visible=false;
     camera.position.set(0, 5.4, -7.4);
     populateMap(MAP);
+    holeTotal = spawners.length;   // 클리어 진행도용(모든 구멍 제거 시 클리어)
     document.getElementById('start').classList.add('hidden');
     document.getElementById('end').classList.add('hidden');
     running=true; ended=false; timeLeft=ROUND_TIME; growMark=START_R;
