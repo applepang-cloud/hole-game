@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>데굴데굴 별왕자 — 굴려라! v6</title>
+<title>데굴데굴 별왕자 — 굴려라! v7</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jua&family=Gothic+A1:wght@400;700;800&display=swap" rel="stylesheet">
@@ -145,23 +145,40 @@
       <div class="prince-emoji">🤴</div>
       <h1 class="jua">굴려라!</h1>
       <div class="sub">데굴데굴 별왕자</div>
-      <p style="font-size:12px;margin:2px 14px">모드를 골라줘 · 화면을 <b>끌거나</b> 방향키로 이동</p>
+      <p style="font-size:12px;margin:2px 14px">맵을 골라 굴려줘 · 화면을 <b>끌거나</b> 방향키로 이동</p>
       <div class="modes">
-        <button class="modebtn" id="modeRoll">
-          <span class="ic">🟢</span>
-          <b>공 굴리기</b>
-          <em>끈끈한 공에 물건을 붙여 키운다</em>
+        <button class="modebtn" id="mapBtn1">
+          <span class="ic">🛏️</span>
+          <b>맵 1 · 내 방</b>
+          <em>개미·쥐·고양이를 굴려서 납작! 창밖엔 누가…</em>
         </button>
-        <button class="modebtn hole" id="modeHole">
-          <span class="ic">⚫</span>
-          <b>구멍 빨아들이기</b>
-          <em>구멍으로 물건을 쏙쏙 삼킨다</em>
+        <button class="modebtn" id="mapBtn2">
+          <span class="ic">🌳</span>
+          <b>맵 2 · 우리 마당</b>
+          <em>정원·집·자동차, 구멍에서 유령이 스멀스멀</em>
         </button>
-        <button class="modebtn room" id="modeRoom">
-          <span class="ic">🔵</span>
-          <b>구멍 피하기</b>
-          <em>파란 볼로 작은 구멍은 없애고 큰 구멍은 피한다</em>
+        <button class="modebtn room" id="mapBtn3">
+          <span class="ic">🛒</span>
+          <b>맵 3 · 대형 마트</b>
+          <em>좀비가 구멍에서! 구멍을 메워 막아라</em>
         </button>
+        <button class="modebtn hole" id="eventToggle" style="opacity:.92">
+          <span class="ic">🎪</span>
+          <b>이벤트 모드</b>
+          <em>고전 모드 2종 (탭하면 펼쳐짐)</em>
+        </button>
+        <div id="eventModes" class="hidden" style="display:flex;flex-direction:column;gap:9px;width:100%">
+          <button class="modebtn" id="modeRoll">
+            <span class="ic">🟢</span>
+            <b>공 굴리기</b>
+            <em>끈끈한 공에 물건을 붙여 키운다</em>
+          </button>
+          <button class="modebtn hole" id="modeHole">
+            <span class="ic">⚫</span>
+            <b>구멍 빨아들이기</b>
+            <em>구멍으로 물건을 쏙쏙 삼킨다</em>
+          </button>
+        </div>
       </div>
       <div class="hint">📱 버튼을 켜면 기울기로 조작 · 🔊 소리 켜면 더 신난다</div>
       <div class="credit">반다이남코 「괴혼(카타마리 다마시)」 시리즈에서 영감 · 오리지널 로우폴리 오마주</div>
@@ -722,6 +739,243 @@ function populate(){
   }
 }
 
+/* ===================== 맵(테마 레벨) 시스템 ===================== */
+let MAP=0, MAP_BOUND=GROUND-2, mapGroup=null, windowGhost=null, ambT=0;
+let monsters=[], splats=[], spawners=[];
+const MONSTER_CAP=34, FLATTEN_RATIO=0.8;
+
+/* --- 몬스터/사람 빌더 (size=충돌 반지름) --- */
+function buildAnt(){ const g=new THREE.Group(); const c=0x3a2418;
+  for(let i=0;i<3;i++){ const s=new THREE.Mesh(new THREE.SphereGeometry(i===1?0.12:0.1,7,6),MAT(c)); s.position.set(0,0.12,(i-1)*0.18); g.add(s); }
+  for(let i=0;i<6;i++){ const l=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,0.18,4),MAT(0x1c120a)); const sx=i<3?-1:1; l.position.set(sx*0.13,0.08,((i%3)-1)*0.14); l.rotation.z=sx*0.9; g.add(l); }
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.1,7,6),MAT(c)); head.position.set(0,0.13,0.28); g.add(head);
+  addShadow(g,0.22); return tag(g,0.22,0); }
+function buildRat(){ const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.2,9,7),MAT(0x9aa0a6)); body.position.set(0,0.18,0); body.scale.set(1,0.8,1.4); g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.13,8,6),MAT(0xa8aeb4)); head.position.set(0,0.2,0.26); g.add(head);
+  for(const sx of[-1,1]){ const ear=new THREE.Mesh(new THREE.CircleGeometry(0.07,8),MAT(0xe7b7c2)); ear.position.set(sx*0.08,0.32,0.24); g.add(ear); }
+  const tail=new THREE.Mesh(new THREE.CylinderGeometry(0.015,0.03,0.5,5),MAT(0xe7b7c2)); tail.position.set(0,0.14,-0.34); tail.rotation.x=1.3; g.add(tail);
+  addShadow(g,0.3); return tag(g,0.3,0); }
+function buildCat(){ const g=new THREE.Group(); const c=0xe79a3a;
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.3,10,8),MAT(c)); body.position.set(0,0.3,0); body.scale.set(1,0.85,1.45); g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.2,9,7),MAT(c)); head.position.set(0,0.42,0.36); g.add(head);
+  for(const sx of[-1,1]){ const ear=new THREE.Mesh(new THREE.ConeGeometry(0.08,0.16,4),MAT(c)); ear.position.set(sx*0.11,0.58,0.34); g.add(ear); }
+  const tail=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.05,0.6,6),MAT(c)); tail.position.set(0,0.4,-0.4); tail.rotation.x=-0.7; g.add(tail);
+  addShadow(g,0.4); return tag(g,0.5,0); }
+function buildGhost(){ const g=new THREE.Group();
+  const m=new THREE.MeshPhongMaterial({color:0xffffff,flatShading:true,transparent:true,opacity:0.86,shininess:0});
+  const top=new THREE.Mesh(new THREE.SphereGeometry(0.32,12,8,0,Math.PI*2,0,Math.PI/2),m); top.position.y=0.5; g.add(top);
+  const skirt=new THREE.Mesh(new THREE.ConeGeometry(0.32,0.5,12,1,true),m); skirt.position.y=0.26; g.add(skirt);
+  for(const sx of[-1,1]){ const eye=new THREE.Mesh(new THREE.SphereGeometry(0.05,6,5),MAT(0x222630)); eye.position.set(sx*0.11,0.55,0.27); g.add(eye); }
+  return tag(g,0.46,0); }
+function buildPumpkin(){ const g=new THREE.Group();
+  const b=new THREE.Mesh(new THREE.SphereGeometry(0.3,12,9),MAT(0xff7a18)); b.position.y=0.3; b.scale.y=0.85; g.add(b);
+  const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.06,0.14,5),MAT(0x4f7a2e)); stem.position.y=0.6; g.add(stem);
+  for(const sx of[-1,1]){ const eye=new THREE.Mesh(new THREE.ConeGeometry(0.07,0.1,3),MAT(0x2a1500)); eye.position.set(sx*0.12,0.34,0.26); eye.rotation.x=Math.PI; g.add(eye); }
+  const mouth=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.05,0.04),MAT(0x2a1500)); mouth.position.set(0,0.2,0.27); g.add(mouth);
+  addShadow(g,0.32); return tag(g,0.42,0); }
+function buildZombie(){ const g=new THREE.Group(); const c=0x6f9e4a;
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.5,0.22),MAT(c)); body.position.y=0.55; g.add(body);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.26,0.24),MAT(0x7fae5a)); head.position.y=0.95; g.add(head);
+  for(const sx of[-1,1]){ const arm=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.4),MAT(c)); arm.position.set(sx*0.22,0.62,0.18); g.add(arm); }
+  for(const sx of[-1,1]){ const leg=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.4,0.14),MAT(0x4a5a8a)); leg.position.set(sx*0.1,0.2,0); g.add(leg); }
+  for(const sx of[-1,1]){ const eye=new THREE.Mesh(new THREE.SphereGeometry(0.03,5,4),MAT(0xff3030)); eye.position.set(sx*0.06,0.98,0.13); g.add(eye); }
+  addShadow(g,0.34); return tag(g,0.5,0); }
+function buildPerson(){ const g=new THREE.Group();
+  const cols=[0xef5350,0x4dabf7,0xffd43b,0x9775fa,0x69db7c,0xff922b]; const c=cols[(Math.random()*cols.length)|0];
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.2,0.5,8),MAT(c)); body.position.y=0.55; g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.16,9,7),MAT(0xf3c9a0)); head.position.y=0.95; g.add(head);
+  for(const sx of[-1,1]){ const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.36,6),MAT(0x394b6e)); leg.position.set(sx*0.08,0.2,0); g.add(leg); }
+  addShadow(g,0.26); return tag(g,0.42,0); }
+
+/* --- 가구/사물 빌더 --- */
+function buildBed(){ const g=new THREE.Group();
+  const frame=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.3,2.4),MAT(0x9a6a3e)); frame.position.y=0.2; g.add(frame);
+  const mat=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.3,2.3),MAT(0xeaf0f6)); mat.position.y=0.45; g.add(mat);
+  const blanket=new THREE.Mesh(new THREE.BoxGeometry(1.52,0.16,1.4),MAT(0x6db1e0)); blanket.position.set(0,0.56,0.4); g.add(blanket);
+  const pillow=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.18,0.5),MAT(0xffffff)); pillow.position.set(0,0.58,-0.9); g.add(pillow);
+  addShadow(g,1.3); return tag(g,1.2,0); }
+function buildDesk(){ const g=new THREE.Group();
+  const top=new THREE.Mesh(new THREE.BoxGeometry(1.4,0.1,0.7),MAT(0xc98a4a)); top.position.y=0.7; g.add(top);
+  for(const sx of[-0.6,0.6]) for(const sz of[-0.28,0.28]){ const l=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.7,0.08),MAT(0xa86a32)); l.position.set(sx,0.35,sz); g.add(l); }
+  addShadow(g,0.8); return tag(g,0.8,0); }
+function buildLaptop(){ const g=new THREE.Group();
+  const base=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.03,0.28),MAT(0x444b55)); base.position.y=0.04; g.add(base);
+  const scr=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.28,0.02),MAT(0x222830)); scr.position.set(0,0.18,-0.13); scr.rotation.x=-0.32; g.add(scr);
+  const glow=new THREE.Mesh(new THREE.PlaneGeometry(0.34,0.22),new THREE.MeshBasicMaterial({color:0x8fd0ff})); glow.position.set(0,0.18,-0.118); glow.rotation.x=-0.32; g.add(glow);
+  addShadow(g,0.3); return tag(g,0.3,0); }
+function buildKitchenTable(){ const g=new THREE.Group();
+  const top=new THREE.Mesh(new THREE.CylinderGeometry(0.7,0.7,0.1,16),MAT(0xe0c089)); top.position.y=0.72; g.add(top);
+  const post=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.12,0.7,8),MAT(0xb08040)); post.position.y=0.36; g.add(post);
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.06,12),MAT(0xb08040)); base.position.y=0.03; g.add(base);
+  addShadow(g,0.7); return tag(g,0.7,0); }
+function buildBookStack(){ const g=new THREE.Group(); const cols=[0xe24b4b,0x4dabf7,0x69db7c,0xffd43b];
+  let y=0; for(let i=0;i<3;i++){ const h=0.08+Math.random()*0.05; const b=new THREE.Mesh(new THREE.BoxGeometry(0.3,h,0.22),MAT(cols[(Math.random()*cols.length)|0])); b.position.set(rand(-0.03,0.03),y+h/2,0); b.rotation.y=rand(-0.2,0.2); g.add(b); y+=h; }
+  addShadow(g,0.2); return tag(g,0.24,0); }
+function buildBicycle(){ const g=new THREE.Group(); const fc=0xef5350;
+  for(const sz of[-0.5,0.5]){ const w=new THREE.Mesh(new THREE.TorusGeometry(0.3,0.04,6,16),MAT(0x222222)); w.position.set(0,0.3,sz); g.add(w); }
+  const bar=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,1.0),MAT(fc)); bar.position.set(0,0.4,0); g.add(bar);
+  const seat=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.06,0.2),MAT(0x222830)); seat.position.set(0,0.56,-0.3); g.add(seat);
+  addShadow(g,0.5); return tag(g,0.5,0); }
+function buildGarage(){ const g=new THREE.Group();
+  const base=new THREE.Mesh(new THREE.BoxGeometry(3.2,2.0,3.0),MAT(0xd8c0a0)); base.position.y=1.0; g.add(base);
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(3.4,0.3,3.2),MAT(0x8a5a3a)); roof.position.y=2.1; g.add(roof);
+  const door=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.5,0.12),MAT(0xbfc7cf)); door.position.set(0,0.78,1.51); g.add(door);
+  addShadow(g,1.8); return tag(g,1.9,0); }
+function buildShelf(){ const g=new THREE.Group();
+  const frame=new THREE.Mesh(new THREE.BoxGeometry(2.4,1.8,0.6),MAT(0xb9c0c7)); frame.position.y=0.9; g.add(frame);
+  const cols=[0xef5350,0x4dabf7,0xffd43b,0x69db7c,0xff922b,0x9775fa];
+  for(let r=0;r<3;r++) for(let c=0;c<5;c++){ const box=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.34,0.34),MAT(cols[(Math.random()*cols.length)|0])); box.position.set(-0.95+c*0.48,0.45+r*0.55,0.16); g.add(box); }
+  addShadow(g,1.4); return tag(g,1.3,0); }
+function buildCart(){ const g=new THREE.Group();
+  const basket=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.4,0.7),new THREE.MeshPhongMaterial({color:0xcfd6dd,flatShading:true})); basket.position.y=0.55; g.add(basket);
+  const handle=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.06,0.06),MAT(0xef5350)); handle.position.set(0,0.78,-0.36); g.add(handle);
+  for(const sx of[-0.2,0.2]) for(const sz of[-0.3,0.3]){ const w=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,0.05,8),MAT(0x222222)); w.rotation.x=Math.PI/2; w.position.set(sx,0.07,sz); g.add(w); }
+  addShadow(g,0.5); return tag(g,0.5,0); }
+function buildFreezer(){ const g=new THREE.Group();
+  const b=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.9,0.9),MAT(0xeef3f7)); b.position.y=0.45; g.add(b);
+  const glass=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.1,0.8),new THREE.MeshPhongMaterial({color:0xbfe6ff,transparent:true,opacity:0.7})); glass.position.y=0.92; g.add(glass);
+  addShadow(g,1.0); return tag(g,1.0,0); }
+function buildWindowGhost(){ const grp=new THREE.Group();
+  const m=new THREE.MeshBasicMaterial({color:0xeaf6ff,transparent:true,opacity:0,depthWrite:false,fog:false});
+  const em=new THREE.MeshBasicMaterial({color:0x0a0a12,transparent:true,opacity:0,depthWrite:false,fog:false});
+  const face=new THREE.Mesh(new THREE.CircleGeometry(0.9,18),m); grp.add(face);
+  for(const sx of[-1,1]){ const eye=new THREE.Mesh(new THREE.CircleGeometry(0.16,10),em); eye.position.set(sx*0.32,0.18,0.02); grp.add(eye); }
+  const mouth=new THREE.Mesh(new THREE.RingGeometry(0.06,0.18,12,1,0,Math.PI),em); mouth.position.set(0,-0.22,0.02); mouth.rotation.z=Math.PI; grp.add(mouth);
+  grp.userData.mats=[m,em]; return grp; }
+
+/* --- 납작(squash) → 펑 연출 --- */
+function addFlat(grp,x,z){
+  if(!grp.userData.hasShadow) addShadow(grp, Math.max(0.2, grp.userData.size*0.9));
+  grp.position.set(x, grp.userData.y, z); grp.rotation.y=Math.random()*Math.PI*2; scene.add(grp);
+  loose.push({ grp, x, z, y:grp.userData.y, size:grp.userData.size, kind:'flat' });
+}
+function squash(grp,x,z,size,growK){
+  splats.push({ grp, t:0, dur:0.30 });
+  ball.vol += Math.pow(size,3)*ABSORB*(growK==null?0.7:growK);
+  ball.score++; refreshBall(); SFX.pop(ball.score); updateHUD();
+  if(ball.r>=goalR() && !ended) finish(true);
+}
+function updateSplats(dt){
+  for(let i=splats.length-1;i>=0;i--){ const s=splats[i]; s.t+=dt; const t=Math.min(1,s.t/s.dur);
+    s.grp.scale.y=Math.max(0.06,1-0.95*t); const sp=1+0.55*t; s.grp.scale.x=sp; s.grp.scale.z=sp;
+    if(t>=1){ spawnPuff(s.grp.position.x,s.grp.position.z); scene.remove(s.grp); splats.splice(i,1); } }
+}
+
+/* --- 몬스터 이동/충돌 --- */
+const MONSTER_BUILD={ant:buildAnt,rat:buildRat,cat:buildCat,ghost:buildGhost,pumpkin:buildPumpkin,zombie:buildZombie,person:buildPerson};
+function spawnMonster(kind,x,z,fromHole){
+  if(monsters.length>=MONSTER_CAP) return null;
+  const grp=(MONSTER_BUILD[kind]||buildAnt)(); const size=grp.userData.size; const baseY=grp.userData.y||0;
+  grp.position.set(x, fromHole? -size*1.8 : baseY, z); grp.rotation.y=Math.random()*Math.PI*2; scene.add(grp);
+  const m={ grp, x, z, size, kind, baseY, dir:Math.random()*Math.PI*2, speed:rand(1.2,2.6), turn:rand(0.6,1.6), bob:Math.random()*6.28, climb: fromHole?1:0 };
+  monsters.push(m); return m;
+}
+function updateMonsters(dt){
+  const bound=MAP_BOUND-0.5;
+  for(let i=monsters.length-1;i>=0;i--){ const m=monsters[i];
+    if(m.climb>0) m.climb=Math.max(0,m.climb-dt/0.6);
+    m.dir += (Math.random()-0.5)*m.turn*dt;
+    let nx=m.x+Math.sin(m.dir)*m.speed*dt, nz=m.z+Math.cos(m.dir)*m.speed*dt;
+    if(nx<-bound||nx>bound){ m.dir=-m.dir; nx=clamp(nx,-bound,bound); }
+    if(nz<-bound||nz>bound){ m.dir=Math.PI-m.dir; nz=clamp(nz,-bound,bound); }
+    m.x=nx; m.z=nz; m.bob+=dt*9;
+    const floatY=(m.kind==='ghost')? 0.5+Math.sin(m.bob)*0.2 : Math.abs(Math.sin(m.bob))*0.07;
+    const climbY=(m.climb>0)? -m.size*1.8*m.climb : 0;
+    m.grp.position.set(nx, m.baseY+floatY+climbY, nz); m.grp.rotation.y=m.dir;
+    const d=Math.hypot(m.x-ball.x,m.z-ball.z), reach=ball.r+m.size*0.7+0.05;
+    if(d<reach && m.climb<=0){
+      if(ball.r>=m.size*FLATTEN_RATIO){ monsters.splice(i,1); squash(m.grp,m.x,m.z,m.size,0.85); }
+      else { const ux=(ball.x-m.x)/(d||1),uz=(ball.z-m.z)/(d||1); ball.x=m.x+ux*reach; ball.z=m.z+uz*reach; }
+    }
+  }
+}
+
+/* --- 구멍 스포너(메우지 않으면 계속 생성) --- */
+function addSpawner(x,z,r,kind,interval){
+  const grp=buildHoleMesh(r); grp.position.set(x,0,z); scene.add(grp);
+  spawners.push({ grp,x,z,r,kind,interval, t:Math.random()*interval, alive:true });
+}
+function updateSpawners(dt){
+  for(let i=spawners.length-1;i>=0;i--){ const s=spawners[i];
+    const d=Math.hypot(s.x-ball.x,s.z-ball.z);
+    if(ball.r>=s.r*0.95 && d<ball.r*0.85){   // 공으로 덮어 메움
+      spawnPuff(s.x,s.z); spawnPuff(s.x,s.z); scene.remove(s.grp); spawners.splice(i,1);
+      ball.vol+=s.r*s.r*s.r*1.3; ball.score++; refreshBall(); SFX.loot(); updateHUD(); continue;
+    }
+    s.t+=dt; if(s.t>=s.interval){ s.t=0; if(monsters.length<MONSTER_CAP) spawnMonster(s.kind, s.x+rand(-0.5,0.5), s.z+rand(-0.5,0.5), true); }
+  }
+}
+
+/* --- 맵 환경 + 배치 --- */
+const MAPS={
+  1:{ name:'내 방', bound:26, indoor:true, floor:0xe7c9a0, line:0xcdab7e, wall:0xc7d8e8, wallH:7 },
+  2:{ name:'우리 마당', bound:58, indoor:false },
+  3:{ name:'대형 마트', bound:40, indoor:true, floor:0xeaecee, line:0xc8ccd0, wall:0xd6dde4, wallH:8 },
+};
+function buildMapWorld(id){
+  if(mapGroup) scene.remove(mapGroup);
+  mapGroup=new THREE.Group(); scene.add(mapGroup);
+  windowGhost=null;
+  const cfg=MAPS[id], H=cfg.bound;
+  if(cfg.indoor){
+    const floor=new THREE.Mesh(new THREE.PlaneGeometry(H*2,H*2), new THREE.MeshPhongMaterial({color:cfg.floor,shininess:6,specular:0x101010}));
+    floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; mapGroup.add(floor);
+    for(let i=-H+2;i<H;i+=4){ const ln=new THREE.Mesh(new THREE.PlaneGeometry(H*2,0.1),new THREE.MeshBasicMaterial({color:cfg.line,transparent:true,opacity:0.5})); ln.rotation.x=-Math.PI/2; ln.position.set(0,0.011,i); mapGroup.add(ln); }
+    const wallMat=new THREE.MeshPhongMaterial({color:cfg.wall,shininess:3}); const WALL_H=cfg.wallH, T=0.8;
+    for(const [x,z,w,d] of [[0,-H,H*2,T],[0,H,H*2,T],[-H,0,T,H*2],[H,0,T,H*2]]){
+      const wall=new THREE.Mesh(new THREE.BoxGeometry(w,WALL_H,d),wallMat); wall.position.set(x,WALL_H/2,z); mapGroup.add(wall); }
+    if(id===1){
+      const win=new THREE.Mesh(new THREE.PlaneGeometry(5,3.2),new THREE.MeshBasicMaterial({color:0x10131c})); win.position.set(0,3.4,-H+0.45); mapGroup.add(win);
+      const frame=new THREE.Mesh(new THREE.PlaneGeometry(5.4,3.6),new THREE.MeshBasicMaterial({color:0xffffff})); frame.position.set(0,3.4,-H+0.44); mapGroup.add(frame);
+      windowGhost=buildWindowGhost(); windowGhost.position.set(0,3.4,-H+0.5); mapGroup.add(windowGhost);
+    }
+  } else {
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(H+60,18,12),new THREE.MeshBasicMaterial({color:0xa9def7,side:THREE.BackSide,fog:false})); mapGroup.add(dome);
+    const ground=new THREE.Mesh(new THREE.CircleGeometry(H+30,44),MAT(0x83cf4e,false)); ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; mapGroup.add(ground);
+    const road=new THREE.Mesh(new THREE.PlaneGeometry(H*2.2,8),MAT(0xcaba8e,false)); road.rotation.x=-Math.PI/2; road.position.set(0,0.02,0); mapGroup.add(road);
+  }
+}
+function populateMap(id){
+  const cfg=MAPS[id], H=cfg.bound-2;
+  const smallN = id===1?40 : id===2?56 : 36;
+  for(let i=0;i<smallN;i++){ const mk=SMALL_MAKERS[(Math.random()*SMALL_MAKERS.length)|0]; addProp(mk(), rand(-H,H), rand(-H,H)); }
+  if(id===1){
+    addFlat(buildBed(), -H*0.55, -H*0.5);
+    addFlat(buildDesk(), H*0.55, -H*0.55);
+    addProp(buildLaptop(), H*0.45, -H*0.45);
+    addFlat(buildKitchenTable(), H*0.5, H*0.5);
+    for(let i=0;i<3;i++) addFlat(buildChair(), H*0.5+rand(-1.5,1.5), H*0.5+rand(-1.5,1.5));
+    addFlat(buildLamp(), -H*0.6, H*0.55);
+    for(let i=0;i<5;i++) addFlat(buildBookStack(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<6;i++) spawnMonster('ant', rand(-H,H), rand(-H,H), false);
+    for(let i=0;i<3;i++) spawnMonster('rat', rand(-H,H), rand(-H,H), false);
+    for(let i=0;i<2;i++) spawnMonster('cat', rand(-H,H), rand(-H,H), false);
+  } else if(id===2){
+    for(let i=0;i<7;i++) addFlat(buildTree(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<8;i++) addFlat(buildBush(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<14;i++) addProp(buildFlower(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<3;i++) addFlat(buildHouse(), -H*0.7+i*H*0.7, -H*0.7+rand(-3,3));
+    addFlat(buildGarage(), H*0.6, -H*0.6);
+    addFlat(buildCar(), H*0.5, -H*0.25);
+    addFlat(buildBicycle(), -H*0.5, H*0.4);
+    for(let i=0;i<3;i++) addFlat(buildMailbox(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<5;i++) spawnMonster('person', rand(-H,H), rand(-H,H), false);
+    for(let i=0;i<4;i++) addSpawner(rand(-H*0.8,H*0.8), rand(-H*0.8,H*0.8), rand(0.7,1.1), i%2?'ghost':'pumpkin', rand(3,5));
+  } else {
+    for(let i=0;i<8;i++) addFlat(buildShelf(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<6;i++) addFlat(buildCart(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<3;i++) addFlat(buildFreezer(), rand(-H,H), rand(-H,H));
+    for(let i=0;i<5;i++) addSpawner(rand(-H*0.8,H*0.8), rand(-H*0.8,H*0.8), rand(0.8,1.2), 'zombie', rand(2.5,4));
+  }
+}
+function updateMapExtras(dt){
+  updateMonsters(dt);
+  if(spawners.length) updateSpawners(dt);
+  if(windowGhost){ ambT+=dt; const o=Math.max(0,Math.sin(ambT*0.55))*0.88;
+    const M=windowGhost.userData.mats; M[0].opacity=o; M[1].opacity=o; windowGhost.position.x=Math.sin(ambT*0.4)*1.1; }
+}
+
 /* ===================== 입력 (조이스틱 + 키보드) ===================== */
 const stickEl = document.getElementById('stick'), knobEl = document.getElementById('stickKnob');
 let touchActive=false, touchId=null, originX=0, originY=0, moveVec={x:0,y:0};
@@ -928,7 +1182,11 @@ function updateAbsorb(dt){
     const d=Math.hypot(it.x-ball.x, it.z-ball.z);
     const reach = r + it.size*0.8 + 0.1;
     if(d < reach){
-      if(it.size <= r*PICK_RATIO){ collect(it); }
+      if(it.kind==='flat'){
+        // 가구/큰 사물 → 충분히 크면 납작(squash)→펑, 아니면 벽
+        if(r >= it.size*FLATTEN_RATIO){ loose.splice(i,1); squash(it.grp,it.x,it.z,it.size,0.8); }
+        else { const nx=(ball.x-it.x)/(d||1), nz=(ball.z-it.z)/(d||1); ball.x=it.x+nx*reach; ball.z=it.z+nz*reach; }
+      } else if(it.size <= r*PICK_RATIO){ collect(it); }
       else {
         // 너무 큰 물건 → 벽처럼 밀어냄
         const nx=(ball.x-it.x)/(d||1), nz=(ball.z-it.z)/(d||1);
@@ -973,7 +1231,7 @@ function updateBall(dt){
     _q.setFromAxisAngle(axis, dist / ball.r);
     ballGroup.quaternion.premultiply(_q);
   }
-  const lim=GROUND-2;
+  const lim=MAP_BOUND;
   ball.x=clamp(ball.x,-lim,lim); ball.z=clamp(ball.z,-lim,lim);
   ballGroup.position.set(ball.x, ball.r, ball.z);
 }
@@ -1091,6 +1349,17 @@ window.__holeEngine = {
   emitControls: emitControls,
   ready: true
 };
+// 디버그 훅(헤드리스 구조 검증용) — rAF가 throttle돼도 step()으로 수동 진행 가능
+window.__HOLE = {
+  get map(){ return MAP; }, get mode(){ return MODE; },
+  get monsters(){ return monsters.length; }, get spawners(){ return spawners.length; },
+  get loose(){ return loose.length; }, get splats(){ return splats.length; },
+  get flats(){ return loose.filter(function(o){return o.kind==='flat';}).length; },
+  get ballR(){ return ball.r; }, get score(){ return ball.score; }, get running(){ return running; },
+  kinds(){ var k={}; monsters.forEach(function(m){k[m.kind]=(k[m.kind]||0)+1;}); return k; },
+  step(dt){ dt=dt||0.05; if(running&&!ended){ if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0) updateMapExtras(dt); } } updateSplats(dt); },
+  warp(r){ ball.vol=Math.pow(r/START_R,3)-1; refreshBall(); }   // 공 크기 강제(테스트)
+};
 EMIT({type:'ready'}); emitControls();
 
 /* ===================== HUD ===================== */
@@ -1132,7 +1401,7 @@ function loop(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   try{
   if(running && !ended){
-    if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); }
+    if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0) updateMapExtras(dt); }
     else if(MODE==='hole'){ updateHole(dt); updateAbsorbHole(dt); updateFalling(dt); }
     else { updateRoom(dt); updateFalling(dt); }
     updateCamera(dt);
@@ -1152,6 +1421,7 @@ function loop(now){
     updateCamera(dt);
   }
   updatePuffs(dt);
+  updateSplats(dt);
   followSun();
   renderer.render(scene,camera);
   }catch(e){ console.error('loop error', e); }
@@ -1165,15 +1435,41 @@ function clearWorld(){
   for(const it of loose) scene.remove(it.grp); loose=[];
   for(const p of puffs) scene.remove(p.m); puffs=[];
   for(const h of holes) scene.remove(h.grp); holes=[];
+  for(const m of monsters) scene.remove(m.grp); monsters=[];
+  for(const s of splats) scene.remove(s.grp); splats=[];
+  for(const s of spawners) scene.remove(s.grp); spawners=[];
+  if(mapGroup){ scene.remove(mapGroup); mapGroup=null; } windowGhost=null;
   roomSink=null; roomTotal=0;
   blueBall.scale.setScalar(1); blueBall.quaternion.identity();
 }
 function beginRound(mode){
-  MODE = mode;
+  // 맵 모드(map1/2/3) → 롤 메커니즘 + 테마 레벨
+  let mapId=0; const mm=/^map([123])$/.exec(mode||'');
+  if(mm){ mapId=+mm[1]; mode='roll'; }
+  MAP = mapId; MODE = mode;
   clearWorld();
   ball = { x:0, z:0, r:START_R, vol:0, area:Math.PI*START_R*START_R, heading:0, score:0 };
   camYaw = 0;
   ballGroup.quaternion.identity();
+  MAP_BOUND = (MAP>0) ? MAPS[MAP].bound-1 : GROUND-2;
+  if(MAP>0){
+    // 테마 맵: 기존 배경 끄고 맵 월드 생성
+    outdoorGroup.visible=false; skyDome.visible=false; roomGroup.visible=false;
+    buildMapWorld(MAP);
+    for(let i=0;i<5;i++){ const star=new THREE.Mesh(new THREE.TetrahedronGeometry(0.32), MAT(0xffe066));
+      const d=new THREE.Vector3(rand(-1,1),rand(-1,1),rand(-1,1)).normalize();
+      star.position.copy(d); ballGroup.add(star); stuck.push({grp:star,dir:d}); }
+    refreshBall();
+    ballGroup.visible=true; prince.visible=true; holeGroup.visible=false; blueBall.visible=false;
+    camera.position.set(0, 5.4, -7.4);
+    populateMap(MAP);
+    document.getElementById('start').classList.add('hidden');
+    document.getElementById('end').classList.add('hidden');
+    running=true; ended=false; timeLeft=ROUND_TIME; growMark=START_R;
+    if(gyroOn) recenterGyro();
+    initAudio(); updateModeUI(); updateHUD(); updateTime();
+    return;
+  }
   const outdoor = (mode!=='room');
   outdoorGroup.visible = outdoor; skyDome.visible = outdoor; roomGroup.visible = !outdoor;
   if(mode==='roll'){
@@ -1230,10 +1526,16 @@ function showMenu(){
   document.getElementById('end').classList.add('hidden');
   document.getElementById('start').classList.remove('hidden');
 }
+function curRound(){ return MAP>0 ? ('map'+MAP) : MODE; }
 document.getElementById('modeRoll').addEventListener('click', ()=> beginRound('roll'));
 document.getElementById('modeHole').addEventListener('click', ()=> beginRound('hole'));
-document.getElementById('modeRoom').addEventListener('click', ()=> beginRound('room'));
-document.getElementById('againBtn').addEventListener('click', ()=> beginRound(MODE));
+document.getElementById('mapBtn1').addEventListener('click', ()=> beginRound('map1'));
+document.getElementById('mapBtn2').addEventListener('click', ()=> beginRound('map2'));
+document.getElementById('mapBtn3').addEventListener('click', ()=> beginRound('map3'));
+document.getElementById('eventToggle').addEventListener('click', function(){
+  document.getElementById('eventModes').classList.toggle('hidden');
+});
+document.getElementById('againBtn').addEventListener('click', ()=> beginRound(curRound()));
 document.getElementById('menuBtn').addEventListener('click', showMenu);
 
 /* ===================== 리사이즈(레터박스 세로) ===================== */
@@ -1274,6 +1576,11 @@ requestAnimationFrame(loop);
   function post(o){ try{ if(EMBEDDED) window.parent.postMessage(Object.assign({hole:true},o), '*'); }catch(e){} }
   var MODEMAP = { roll:'modeRoll', hole:'modeHole', room:'modeRoom' };
   function startMode(mode){
+    // 맵 모드(map1/2/3)는 엔진을 직접 호출
+    if(/^map[123]$/.test(mode)){
+      if(window.__holeEngine && window.__holeEngine.start){ window.__holeEngine.start(mode); post({type:'start', mode:mode}); }
+      return;
+    }
     var btn = document.getElementById(MODEMAP[mode] || 'modeRoll');
     if(btn){ btn.click(); post({type:'start', mode:mode}); }
   }
@@ -1300,7 +1607,7 @@ requestAnimationFrame(loop);
   // ?mode= 자동 시작
   try{
     var m = new URLSearchParams(location.search).get('mode');
-    if(m && MODEMAP[m]) startMode(m);
+    if(m && (MODEMAP[m] || /^map[123]$/.test(m))) startMode(m);
   }catch(e){}
 
   // Flutter → 게임 명령 수신 (엔드카드 "다시 하기" / 모드 전환)

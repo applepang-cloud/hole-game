@@ -24,14 +24,18 @@ class GameMode {
   const GameMode(this.id, this.emoji, this.title, this.desc, this.accent);
 }
 
-const kModes = <GameMode>[
+const kMaps = <GameMode>[
+  GameMode('map1', '🛏️', '맵 1 · 내 방', '개미·쥐·고양이를 굴려 납작! 창밖엔 누가…', Color(0xFF7BBF3A)),
+  GameMode('map2', '🌳', '맵 2 · 우리 마당', '정원·집·자동차, 구멍에서 유령이…', Color(0xFF3A8F50)),
+  GameMode('map3', '🛒', '맵 3 · 대형 마트', '좀비가 구멍에서! 구멍을 메워 막아라', Color(0xFF2A5A9C)),
+];
+const kEventModes = <GameMode>[
   GameMode('roll', '🟢', '공 굴리기', '끈끈한 공에 물건을 붙여 키운다', Color(0xFF7BBF3A)),
   GameMode('hole', '⚫', '구멍 빨아들이기', '구멍으로 물건을 쏙쏙 삼킨다', Color(0xFF3A3550)),
-  GameMode('room', '🔵', '구멍 피하기', '작은 구멍은 없애고 큰 구멍은 피한다', Color(0xFF2A5A9C)),
 ];
 
-GameMode _modeById(String id) =>
-    kModes.firstWhere((m) => m.id == id, orElse: () => kModes.first);
+GameMode _modeById(String id) => [...kMaps, ...kEventModes]
+    .firstWhere((m) => m.id == id, orElse: () => kMaps.first);
 
 class HoleApp extends StatelessWidget {
   const HoleApp({super.key});
@@ -496,22 +500,28 @@ class _GameInputLayerState extends State<_GameInputLayer> {
   }
 }
 
-/// 홈 = 모드 선택 화면
-class _ModeSelect extends StatelessWidget {
+/// 홈 = 맵 선택 + 이벤트 모드
+class _ModeSelect extends StatefulWidget {
   const _ModeSelect({required this.onPlay});
   final void Function(String mode) onPlay;
+  @override
+  State<_ModeSelect> createState() => _ModeSelectState();
+}
+
+class _ModeSelectState extends State<_ModeSelect> {
+  bool _eventOpen = false;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return SingleChildScrollView(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(height: 12),
-          const Text('🤴', style: TextStyle(fontSize: 64)),
+          const SizedBox(height: 14),
+          const Text('🤴', style: TextStyle(fontSize: 56)),
           const Text('굴려라!',
               style: TextStyle(
-                  fontSize: 52,
+                  fontSize: 46,
                   fontWeight: FontWeight.w900,
                   color: Colors.white,
                   shadows: [
@@ -519,19 +529,55 @@ class _ModeSelect extends StatelessWidget {
                   ])),
           const Text('데굴데굴 별왕자',
               style: TextStyle(
-                  fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 28),
-          for (final m in kModes)
+                  fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 18),
+          for (final m in kMaps)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: _ModeCard(mode: m, onTap: () => onPlay(m.id)),
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: _ModeCard(mode: m, onTap: () => widget.onPlay(m.id)),
             ),
-          const Spacer(),
-          const Padding(
-            padding: EdgeInsets.only(bottom: 10),
-            child: Text('반다이남코 「괴혼」 오마주 · Flutter 셸 + three.js',
-                style: TextStyle(fontSize: 10, color: Colors.white70)),
+          const SizedBox(height: 6),
+          // 이벤트 모드 토글
+          SizedBox(
+            width: 300,
+            child: Material(
+              color: const Color(0xFF3A3550),
+              borderRadius: BorderRadius.circular(16),
+              elevation: 3,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => setState(() => _eventOpen = !_eventOpen),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      const Text('🎪', style: TextStyle(fontSize: 22)),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text('이벤트 모드',
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white)),
+                      ),
+                      Icon(_eventOpen ? Icons.expand_less : Icons.expand_more,
+                          color: Colors.white),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
+          if (_eventOpen)
+            for (final m in kEventModes)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: _ModeCard(mode: m, onTap: () => widget.onPlay(m.id)),
+              ),
+          const SizedBox(height: 12),
+          const Text('반다이남코 「괴혼」 오마주 · Flutter 셸 + three.js',
+              style: TextStyle(fontSize: 10, color: Colors.white70)),
+          const SizedBox(height: 10),
         ],
       ),
     );
