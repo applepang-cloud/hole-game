@@ -32,9 +32,12 @@
   <title>굴려라! — 데굴데굴 별왕자</title>
   <link rel="manifest" href="manifest.json">
   <style>
-    /* three.js 게임 오버레이 iframe (platform view 회피: 순수 DOM 오버레이) */
-    #holeGame{ position:fixed; inset:0; width:100%; height:100%; border:0; z-index:9999;
+    /* 레이어 구조: 게임 iframe(아래) + Flutter(위, 투명 HUD 오버레이) — platform view 회피 */
+    /* 평소엔 Flutter가 불투명하게 게임을 덮고, 플레이 중엔 Flutter를 투명+통과시켜 게임이 보이고 조작됨 */
+    #holeGame{ position:fixed; inset:0; width:100%; height:100%; border:0; z-index:1;
       display:none; background:#0a0d12; }
+    flutter-view{ z-index:2; }                       /* iframe(1) 위에 Flutter HUD */
+    html.playing flutter-view{ pointer-events:none; }/* 플레이 중 터치가 게임으로 통과 */
     #holeBack{ position:fixed; top:12px; left:12px; z-index:10000; display:none;
       font:700 14px/1 "Malgun Gothic",sans-serif; color:#4a3b2a; cursor:pointer;
       background:#fff7e6; border:3px solid #fff; border-radius:12px; padding:9px 14px;
@@ -55,7 +58,8 @@
       var back  = document.getElementById('holeBack');
       var SRC = 'game/index.html';
       function notify(type){ if(typeof window.__holeOnGameMsg==='function') window.__holeOnGameMsg(JSON.stringify({hole:true,type:type})); }
-      // Flutter(Dart)에서 호출 — 게임 표시 + 해당 모드로 시작
+      var docEl = document.documentElement;
+      // Flutter(Dart)에서 호출 — 게임 표시 + 해당 모드로 시작 + 플레이 모드(Flutter 투명·통과) 진입
       window.holeShowGame = function(mode){
         mode = mode || 'roll';
         if(!frame.src){
@@ -64,9 +68,13 @@
           frame.contentWindow.postMessage({holeCmd:'restart', mode:mode}, '*');  // 재사용 → 재시작
         }
         frame.classList.add('show'); back.classList.add('show');
+        docEl.classList.add('playing');               // Flutter HUD 통과 모드
       };
-      // Flutter에서 호출 — 게임 숨김(홈/엔드카드 복귀)
-      window.holeHideGame = function(){ frame.classList.remove('show'); back.classList.remove('show'); };
+      // Flutter에서 호출 — 게임 숨김(홈/엔드카드 복귀) + UI 모드(Flutter 불투명·조작 가능)
+      window.holeHideGame = function(){
+        frame.classList.remove('show'); back.classList.remove('show');
+        docEl.classList.remove('playing');
+      };
       // Flutter에서 호출 — 엔드카드 "다시 하기"(같은 모드 재시작)
       window.holeRestart = function(mode){ window.holeShowGame(mode); };
       back.addEventListener('click', function(){ window.holeHideGame(); notify('home'); });

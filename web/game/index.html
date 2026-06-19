@@ -31,6 +31,7 @@
   canvas#g{ display:block; width:100%; height:100%; }
 
   .hud{ position:absolute; inset:0; pointer-events:none; z-index:4; }
+  body.embedded .hud{ display:none !important; }   /* 임베드 시 HUD는 Flutter 오버레이가 담당 */
   .top{ position:absolute; top:10px; left:10px; right:10px; display:flex; gap:8px; align-items:flex-start; justify-content:space-between; }
   .panel{ background:var(--cream); border:3px solid #fff; border-radius:14px; box-shadow:0 4px 0 #d8c39a, 0 8px 18px #0003; }
   .sizebox{ padding:7px 13px 8px; text-align:center; min-width:118px; }
@@ -1269,10 +1270,23 @@ requestAnimationFrame(loop);
     if(btn){ btn.click(); post({type:'start', mode:mode}); }
   }
 
-  // 임베드되면 모드선택(start)·엔드카드(end) 베일은 Flutter가 담당 → DOM 베일 숨김
+  // 임베드되면 모드선택(start)·엔드카드(end)·HUD는 Flutter가 담당 → DOM 숨김
   if(EMBEDDED){
+    document.body.classList.add('embedded');
     var s=document.getElementById('start'); if(s) s.classList.add('hidden');
     var e0=document.getElementById('end'); if(e0) e0.classList.add('hidden');
+    // 스테이지(레터박스) 사각형을 Flutter로 알려 HUD 정렬 → resize/orientation 시 갱신
+    var emitLayout=function(){
+      try{
+        var r=document.getElementById('stage').getBoundingClientRect();
+        post({type:'layout', x:r.left, y:r.top, w:r.width, h:r.height});
+      }catch(e){}
+    };
+    window.__holeEmitLayout = emitLayout;
+    addEventListener('resize', emitLayout);
+    addEventListener('orientationchange', function(){ setTimeout(emitLayout,260); });
+    // 초기 1회 + 약간의 지연 후 재전송(레이아웃 안정화)
+    emitLayout(); setTimeout(emitLayout, 300); setTimeout(emitLayout, 900);
   }
 
   // ?mode= 자동 시작

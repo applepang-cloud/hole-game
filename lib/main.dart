@@ -54,7 +54,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String? _mode; // 현재 진행 중인 모드
+  bool _playing = false; // 인게임(HUD 오버레이) 여부
   Map<String, dynamic>? _result; // 엔드카드 데이터(null이면 미표시)
+  Map<String, dynamic> _state = const {}; // 최신 인게임 HUD 상태
+  Rect? _stage; // 게임 스테이지(레터박스) 사각형 — HUD 정렬용
 
   @override
   void initState() {
@@ -72,14 +75,33 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       return;
     }
-    final type = msg['type'];
-    if (type == 'over') {
-      // 게임 오버 → iframe 숨기고 Flutter 엔드카드 표시
-      _holeHideGame();
-      setState(() => _result = msg);
-    } else if (type == 'home') {
-      // 인게임 "← 홈" 버튼 → 홈 복귀
-      setState(() => _result = null);
+    switch (msg['type']) {
+      case 'state': // 인게임 HUD 갱신(초당 1회 + 이벤트 시)
+        _state = msg;
+        if (_playing && mounted) setState(() {});
+        break;
+      case 'layout': // 스테이지 사각형 → HUD 정렬
+        _stage = Rect.fromLTWH(
+          (msg['x'] as num).toDouble(),
+          (msg['y'] as num).toDouble(),
+          (msg['w'] as num).toDouble(),
+          (msg['h'] as num).toDouble(),
+        );
+        if (mounted) setState(() {});
+        break;
+      case 'over': // 게임 오버 → iframe 숨기고 Flutter 엔드카드 표시
+        _holeHideGame();
+        setState(() {
+          _playing = false;
+          _result = msg;
+        });
+        break;
+      case 'home': // 인게임 "← 홈" 버튼 → 홈 복귀
+        setState(() {
+          _playing = false;
+          _result = null;
+        });
+        break;
     }
   }
 
@@ -88,6 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _mode = mode;
       _result = null;
+      _playing = true;
     });
     _holeShowGame(mode.toJS);
   }
@@ -95,20 +118,55 @@ class _HomeScreenState extends State<HomeScreen> {
   // 엔드카드: 다시 하기(같은 모드)
   void _again() {
     final mode = _mode ?? 'roll';
-    setState(() => _result = null);
+    setState(() {
+      _result = null;
+      _playing = true;
+    });
     _holeRestart(mode.toJS);
   }
 
   // 엔드카드: 모드 선택(홈 복귀)
   void _toHome() {
-    setState(() => _result = null);
+    setState(() {
+      _result = null;
+      _playing = false;
+    });
     _holeHideGame();
   }
 
   @override
   Widget build(BuildContext context) {
+    final Widget content;
+    if (_result != null) {
+      content = KeyedSubtree(
+        key: const ValueKey('end'),
+        child: _withBackdrop(_EndCard(
+          result: _result!,
+          onAgain: _again,
+          onHome: _toHome,
+        )),
+      );
+    } else if (_playing) {
+      // 인게임: 배경 투명(뒤의 게임 iframe이 비침) + HUD 오버레이만
+      content = _HudOverlay(key: const ValueKey('hud'), state: _state, stage: _stage);
+    } else {
+      content = KeyedSubtree(
+        key: const ValueKey('home'),
+        child: _withBackdrop(_ModeSelect(onPlay: _play)),
+      );
+    }
+    // Scaffold 자체는 항상 투명 — 불투명 화면은 _withBackdrop이 직접 그라데이션을 깐다.
     return Scaffold(
-      body: Container(
+      backgroundColor: Colors.transparent,
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        child: content,
+      ),
+    );
+  }
+
+  // 홈/엔드카드용 불투명 배경(그라데이션)
+  Widget _withBackdrop(Widget child) => Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -116,19 +174,151 @@ class _HomeScreenState extends State<HomeScreen> {
             colors: [Color(0xFFBFEAFF), Color(0xFF8FD2F5), Color(0xFF6CC05E)],
           ),
         ),
-        child: SafeArea(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            child: _result == null
-                ? _ModeSelect(key: const ValueKey('home'), onPlay: _play)
-                : _EndCard(
-                    key: const ValueKey('end'),
-                    result: _result!,
-                    onAgain: _again,
-                    onHome: _toHome,
-                  ),
+        child: SafeArea(child: child),
+      );
+}
+
+/// 인게임 HUD를 Flutter로 그리는 투명 오버레이.
+/// 게임이 보내준 stage 사각형(레터박스) 안에 게임 DOM HUD와 동일 좌표로 배치한다.
+class _HudOverlay extends StatelessWidget {
+  const _HudOverlay({super.key, required this.state, required this.stage});
+  final Map<String, dynamic> state;
+  final Rect? stage;
+
+  static const _cream = Color(0xFFFFF7E6);
+  static const _ink = Color(0xFF4A3B2A);
+  static const _muted = Color(0xFF9B8A72);
+  static const _org = Color(0xFFE8552D);
+  static const _grn = Color(0xFF7BBF3A);
+  static const _red = Color(0xFFEF5350);
+
+  static const _panel = BoxDecoration(
+    color: _cream,
+    border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 3)),
+    borderRadius: BorderRadius.all(Radius.circular(14)),
+    boxShadow: [BoxShadow(color: Color(0x33000000), blurRadius: 10, offset: Offset(0, 4))],
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final rect = stage ?? Rect.fromLTWH(0, 0, size.width, size.height);
+    return Stack(
+      children: [
+        Positioned(
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+          child: _stageHud(rect.width),
+        ),
+      ],
+    );
+  }
+
+  Widget _stageHud(double stageW) {
+    final sizeStr = (state['size'] ?? '') as String;
+    final mmss = (state['mmss'] ?? '0:00') as String;
+    final warn = state['warn'] == true;
+    final count = (state['count'] as num?)?.toInt() ?? 0;
+    final countLabel = (state['countLabel'] ?? '') as String;
+    final double goalPct =
+        ((state['goalPct'] as num?)?.toDouble() ?? 0.0).clamp(0.0, 1.0).toDouble();
+    final goalText = (state['goalText'] ?? '') as String;
+    final goalW = stageW * 0.74 > 300 ? 300.0 : stageW * 0.74;
+
+    return Stack(
+      children: [
+        // 좌상단 크기 패널
+        Positioned(
+          top: 10,
+          left: 10,
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 118),
+            padding: const EdgeInsets.fromLTRB(13, 7, 13, 8),
+            decoration: _panel,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('크기',
+                    style: TextStyle(fontSize: 10, color: _muted, letterSpacing: 1)),
+                Text(sizeStr,
+                    style: const TextStyle(
+                        fontSize: 24, height: 1.05, fontWeight: FontWeight.w900, color: _org)),
+              ],
+            ),
           ),
         ),
+        // 우상단 타이머 + 카운트
+        Positioned(
+          top: 10,
+          right: 10,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: _panel,
+                child: Text(mmss,
+                    style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: warn ? _red : _ink)),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                decoration: _panel,
+                child: Text('$countLabel $count',
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w800, color: _grn)),
+              ),
+            ],
+          ),
+        ),
+        // 상단 중앙 목표 게이지
+        Positioned(
+          top: 62,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: SizedBox(
+              width: goalW,
+              child: _goalBar(goalPct, goalText),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _goalBar(double pct, String text) {
+    return Container(
+      height: 15,
+      decoration: BoxDecoration(
+        color: const Color(0xCCFFFFFF),
+        border: Border.all(color: Colors.white, width: 3),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 3, offset: Offset(0, 3))],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          FractionallySizedBox(
+            widthFactor: pct,
+            heightFactor: 1,
+            child: const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [Color(0xFF9BE15D), Color(0xFF5FB524)]),
+              ),
+            ),
+          ),
+          Center(
+            child: Text(text,
+                style: const TextStyle(
+                    fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF3C5A18))),
+          ),
+        ],
       ),
     );
   }
@@ -136,7 +326,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
 /// 홈 = 모드 선택 화면
 class _ModeSelect extends StatelessWidget {
-  const _ModeSelect({super.key, required this.onPlay});
+  const _ModeSelect({required this.onPlay});
   final void Function(String mode) onPlay;
 
   @override
@@ -236,7 +426,6 @@ class _ModeCard extends StatelessWidget {
 /// 게임 오버 → Flutter 엔드카드
 class _EndCard extends StatelessWidget {
   const _EndCard({
-    super.key,
     required this.result,
     required this.onAgain,
     required this.onHome,
