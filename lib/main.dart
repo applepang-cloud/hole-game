@@ -143,7 +143,7 @@ class HoleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '굴려라! — 퇴마사 소년',
+      title: '홀 인 더 다크 (Hole in the Dark)',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         fontFamily: 'Malgun Gothic',
@@ -911,14 +911,14 @@ class _HomeMenu extends StatelessWidget {
                 errorBuilder: (c, e, s) => const Text('🧑‍🚀', style: TextStyle(fontSize: 70))),
           ),
           const SizedBox(height: 6),
-          const Text('굴려라!',
+          const Text('홀 인 더 다크',
               style: TextStyle(
-                  fontSize: 52,
+                  fontSize: 44,
                   fontWeight: FontWeight.w900,
                   color: Colors.white,
                   shadows: [Shadow(color: Color(0xFFE8552D), offset: Offset(0, 4), blurRadius: 0)])),
-          const Text('퇴마사 소년의 싱크홀 봉인',
-              style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
+          const Text('Hole in the Dark · 퇴마사 소년',
+              style: TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold)),
           const SizedBox(height: 40),
           _bigMenu('📖', '스토리', '맵을 순서대로 모험', const Color(0xFFEF5D1E), onStory),
           const SizedBox(height: 16),

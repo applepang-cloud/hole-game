@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>데굴데굴 별왕자 — 굴려라! v7</title>
+<title>홀 인 더 다크 (Hole in the Dark)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jua&family=Gothic+A1:wght@400;700;800&display=swap" rel="stylesheet">
@@ -166,8 +166,8 @@
 
     <div class="veil" id="start">
       <div class="prince-emoji">🤴</div>
-      <h1 class="jua">굴려라!</h1>
-      <div class="sub">데굴데굴 별왕자</div>
+      <h1 class="jua">홀 인 더 다크</h1>
+      <div class="sub">Hole in the Dark · 퇴마사 소년</div>
       <p style="font-size:12px;margin:2px 14px">맵을 골라 굴려줘 · 화면을 <b>끌거나</b> 방향키로 이동</p>
       <div class="modes">
         <button class="modebtn" id="mapBtn1">
@@ -1087,6 +1087,40 @@ function buildTorch(){ const g=new THREE.Group();
   const flame=new THREE.Mesh(new THREE.ConeGeometry(0.14,0.34,7),new THREE.MeshBasicMaterial({color:0x7af0d0})); flame.position.y=1.35; g.add(flame); // 도깨비불(청록)
   addShadow(g,0.2); return tag(g,0.28,0); }
 
+/* --- 추가 소품: 선풍기·편의점·신문가판대·잔디깎이·분리수거함 --- */
+function buildFan(){ const g=new THREE.Group();
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.34,0.08,12),MAT(0x44505e)); base.position.y=0.04; g.add(base);
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.9,8),MAT(0x9aa6b2)); pole.position.y=0.5; g.add(pole);
+  const cage=new THREE.Mesh(new THREE.TorusGeometry(0.3,0.035,8,18),MAT(0xcfd6dd)); cage.position.set(0,1.0,0.06); g.add(cage);
+  const hub=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,0.1,10),MAT(0x556070)); hub.rotation.x=Math.PI/2; hub.position.set(0,1.0,0.04); g.add(hub);
+  for(let i=0;i<4;i++){ const a=i/4*Math.PI*2; const bl=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.24,0.02),MAT(0xeaf0f6)); bl.position.set(Math.sin(a)*0.12,1.0+Math.cos(a)*0.12,0.04); bl.rotation.z=a; g.add(bl); }
+  addShadow(g,0.34); return tag(g,0.5,0); }
+function buildConvenience(){ const g=new THREE.Group();
+  const base=new THREE.Mesh(new THREE.BoxGeometry(2.6,1.8,2.0),MAT(0xeef2f6)); base.position.y=0.9; g.add(base);
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(2.8,0.3,2.2),MAT(0x2a8f5a)); roof.position.y=1.95; g.add(roof);
+  const sign=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.5,0.1),MAT(0xff7a18)); sign.position.set(0,1.6,1.02); g.add(sign);
+  const win=new THREE.Mesh(new THREE.BoxGeometry(1.6,1.0,0.08),MAT(0xbfe6ff)); win.position.set(-0.3,0.8,1.0); g.add(win);
+  const door=new THREE.Mesh(new THREE.BoxGeometry(0.6,1.1,0.08),MAT(0x9fd0ef)); door.position.set(0.9,0.55,1.0); g.add(door);
+  addShadow(g,1.6); return tag(g,1.9,0); }
+function buildNewsstand(){ const g=new THREE.Group();
+  const box=new THREE.Mesh(new THREE.BoxGeometry(1.1,1.1,0.8),MAT(0x8a5a3a)); box.position.y=0.55; g.add(box);
+  const counter=new THREE.Mesh(new THREE.BoxGeometry(1.25,0.1,1.0),MAT(0x6b4a2a)); counter.position.y=1.1; g.add(counter);
+  const awning=new THREE.Mesh(new THREE.BoxGeometry(1.35,0.08,0.55),MAT(0xc0392b)); awning.position.set(0,1.5,0.5); awning.rotation.x=0.35; g.add(awning);
+  for(const sx of[-1,1]){ const post=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,1.5,5),MAT(0x6b6b6b)); post.position.set(sx*0.55,0.75,0.45); g.add(post); }
+  for(let i=0;i<3;i++){ const paper=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.02,0.4),MAT(0xf2f2f2)); paper.position.set(-0.3+i*0.3,1.16,0.1); g.add(paper); }
+  addShadow(g,0.9); return tag(g,1.0,0); }
+function buildLawnMower(){ const g=new THREE.Group();
+  const deck=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.3,0.8),MAT(0xd23b3b)); deck.position.y=0.3; g.add(deck);
+  const eng=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.26,0.32),MAT(0x33373d)); eng.position.set(0,0.55,0); g.add(eng);
+  const handle=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.04,0.7),MAT(0x6b6b6b)); handle.position.set(0,0.62,-0.5); handle.rotation.x=0.7; g.add(handle);
+  const grip=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.05,0.05),MAT(0x222831)); grip.position.set(0,0.95,-0.78); g.add(grip);
+  for(const sx of[-1,1]) for(const sz of[-0.32,0.32]){ const w=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.14,0.1,10),MAT(0x222222)); w.rotation.z=Math.PI/2; w.position.set(sx*0.32,0.14,sz); g.add(w); }
+  addShadow(g,0.5); return tag(g,0.55,0); }
+function buildRecycleBins(){ const g=new THREE.Group(); const cols=[0x2a8f5a,0x4a86c6,0xf4c430];
+  for(let i=0;i<3;i++){ const bin=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.5,0.32),MAT(cols[i])); bin.position.set((i-1)*0.4,0.25,0); g.add(bin);
+    const lid=new THREE.Mesh(new THREE.BoxGeometry(0.38,0.06,0.36),MAT(0x33373d)); lid.position.set((i-1)*0.4,0.53,0); g.add(lid); }
+  addShadow(g,0.7); return tag(g,0.7,0); }
+
 /* --- 맵 환경 + 배치 --- */
 const MAPS={
   1:{ name:'내 방', bound:13, indoor:true, floor:0xe7c9a0, line:0xcdab7e, wall:0xc7d8e8, wallH:7 },
@@ -1159,6 +1193,7 @@ function populateMap(id){
   if(id===1){
     flat(buildBed,2,2.5,0.8,1.2); flat(buildDesk,3,2,0.8,1.4); flat(buildKitchenTable,2,2,0.8,1.3);
     flat(buildChair,6,1.5,0.8,1.4); flat(buildLamp,3,1.5,0.8,1.3); flat(buildBookStack,10,0,0.7,1.9);
+    flat(buildFan,2,1.5,0.85,1.2);   // 선풍기
     prop(buildLaptop,3,0.8,1.4); prop(buildMug,7,0.8,1.9); prop(buildApple,7,0.8,1.9);
     for(let i=0;i<8;i++) spawnMonster('ant',P(),P(),false);
     for(let i=0;i<4;i++) spawnMonster('rat',P(),P(),false);
@@ -1168,7 +1203,8 @@ function populateMap(id){
   } else if(id===2){
     flat(buildTree,10,2,0.8,1.7); flat(buildBush,12,0,0.8,1.6); prop(buildFlower,22,0.8,1.9);
     flat(buildHouse,3,3,0.85,1.2); flat(buildGarage,1,3,0.9,1.1); flat(buildCar,3,2,0.85,1.3);
-    flat(buildBicycle,2,1.5,0.9,1.3); flat(buildMailbox,4,0,0.8,1.4); flat(buildLamp,4,0,0.8,1.3);
+    flat(buildBicycle,2,1.5,0.9,1.3); flat(buildMailbox,5,0,0.8,1.4); flat(buildLamp,4,0,0.8,1.3);
+    flat(buildLawnMower,1,2,0.9,1.2); flat(buildRecycleBins,2,0,0.85,1.1);   // 잔디깎이·분리수거함
     for(let i=0;i<6;i++) spawnMonster('person',P(),P(),false);
     for(let i=0;i<4;i++) addSpawner(P(),P(),rand(0.4,0.6),null,0);
     for(let i=0;i<6;i++){ const p=Pc(2.5); addSpawner(p[0],p[1],rand(0.9,1.6),i%2?'ghost':'pumpkin',rand(3,5)); }
@@ -1186,9 +1222,10 @@ function populateMap(id){
     for(let i=0;i<4;i++) addSpawner(P(),P(),rand(0.4,0.6),null,0);
     for(let i=0;i<6;i++){ const p=Pc(2.5); addSpawner(p[0],p[1],rand(0.9,1.5),i%2?'skeleton':'goblin',rand(2.8,4.2)); }
   } else if(id===5){
-    flat(buildBuilding,9,3,0.8,1.5); flat(buildCar,6,1.5,0.85,1.3); flat(buildBus,3,2.5,0.9,1.2);
+    flat(buildBuilding,8,3,0.8,1.5); flat(buildCar,6,1.5,0.85,1.3); flat(buildBus,3,2.5,0.9,1.2);
     flat(buildTrafficLight,5,0,0.8,1.3); flat(buildBench,6,0,0.8,1.4); flat(buildLamp,6,0,0.8,1.3);
-    flat(buildMailbox,4,0,0.8,1.4); flat(buildTree,5,1,0.8,1.4);
+    flat(buildMailbox,5,0,0.8,1.4); flat(buildTree,5,1,0.8,1.4);
+    flat(buildConvenience,2,3,0.85,1.1); flat(buildNewsstand,3,1.5,0.85,1.2); flat(buildRecycleBins,3,0,0.85,1.1);   // 작은 마트·신문 가판대·분리수거함
     for(let i=0;i<7;i++) spawnMonster('person',P(),P(),false);
     for(let i=0;i<4;i++) addSpawner(P(),P(),rand(0.4,0.6),null,0);
     for(let i=0;i<7;i++){ const p=Pc(2.5); addSpawner(p[0],p[1],rand(1.0,1.6),i%2?'goblin':'ghost',rand(2.6,4)); }
