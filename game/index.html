@@ -60,6 +60,12 @@
   .hpbar > i{ display:block; height:100%; width:100%; background:#4ad06a; transition:width .2s ease, background .2s; }
   .hpbar .hpnum{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     font-size:10px; font-weight:800; color:#fff; text-shadow:0 1px 2px #000a; }
+  #countdown{ position:absolute; inset:0; display:none; align-items:center; justify-content:center; z-index:9;
+    pointer-events:none; font-size:140px; font-weight:900; color:#fff;
+    text-shadow:0 6px 0 #e8552d, 0 10px 24px #0008; }
+  #countdown.show{ display:flex; }
+  #countdown.pop{ animation:cdpop 0.5s ease-out; }
+  @keyframes cdpop{ 0%{ transform:scale(2.2); opacity:0; } 35%{ transform:scale(1); opacity:1; } 100%{ transform:scale(0.7); opacity:0.2; } }
   #pauseBtn{ position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:6;
     width:42px; height:42px; border-radius:50%; border:3px solid #fff; background:var(--cream);
     box-shadow:0 4px 0 #d8c39a; font-size:17px; cursor:pointer; color:var(--ink); pointer-events:auto; }
@@ -153,6 +159,7 @@
       <button id="bSound" title="효과음">🔊</button>
     </div>
     <div id="toast" class="toast hidden"></div>
+    <div id="countdown" class="jua">3</div>
 
     <div class="stick" id="stick"><i id="stickKnob"></i></div>
 
@@ -275,7 +282,7 @@ let falling = [];             // [구멍] 빨려드는 애니메이션 중인 �
 let loose = [];               // {grp, x, z, y, size}
 let ball = { x:0, z:0, r:START_R, vol:0, area:Math.PI*START_R*START_R, heading:0, score:0 };
 let camYaw = 0;
-let running = false, ended = false, timeLeft = ROUND_TIME;
+let running = false, ended = false, timeLeft = ROUND_TIME, countdown = 0;   // countdown: 시작 전 3-2-1 대기(초)
 
 /* ===================== 렌더러/씬 ===================== */
 function initThree(){
@@ -2015,7 +2022,22 @@ function initAudio(){
   try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
   sfxGain=actx.createGain(); sfxGain.gain.value=0.32; sfxGain.connect(actx.destination);
   musGain=actx.createGain(); musGain.gain.value=0.32; musGain.connect(actx.destination);
-  startMusic(); initAmbient();
+  initAmbient();   // 배경음악은 mp3(setMusic)로 대체
+}
+// mp3 배경음악 (game/music/mapN.mp3) — 임베드/스탠드얼론 양쪽서 동일 경로 해석
+const MUSIC_BASE = (location.pathname.indexOf('/game/')>=0) ? 'music/' : 'game/music/';
+let bgm=null, bgmFile='';
+function trackFor(){
+  if(MAP>0) return 'map'+MAP+'.mp3';        // 스토리 맵 N → mapN.mp3
+  if(SNOW) return 'map4.mp3';                // 이벤트: 눈사람
+  if(MODE==='hole') return 'map3.mp3';       // 이벤트: 구멍 빨아들이기
+  return 'map2.mp3';                          // 이벤트: 공 굴리기/방
+}
+function setMusic(file){
+  if(!file) return;
+  if(!bgm){ bgm=new Audio(); bgm.loop=true; bgm.volume=0.45; bgm.preload='auto'; }
+  if(bgmFile!==file){ bgmFile=file; bgm.src=MUSIC_BASE+file; try{ bgm.load(); }catch(_){} }
+  if(musicOn){ const p=bgm.play(); if(p&&p.catch) p.catch(()=>{}); } else { bgm.pause(); }
 }
 function tone(freq,dur,type,gain,slide){
   if(!actx||!soundOn) return; const t=actx.currentTime;
@@ -2106,7 +2128,7 @@ function ambTick(){ if(!actx||!soundOn||!running) return; if(Math.random()>0.5) 
   }
 }
 document.getElementById('bSound').addEventListener('click', function(){ soundOn=!soundOn; this.classList.toggle('off',!soundOn); this.textContent=soundOn?'🔊':'🔇'; initAudio(); });
-document.getElementById('bMusic').addEventListener('click', function(){ musicOn=!musicOn; this.classList.toggle('off',!musicOn); initAudio(); });
+document.getElementById('bMusic').addEventListener('click', function(){ musicOn=!musicOn; this.classList.toggle('off',!musicOn); initAudio(); if(bgm){ if(musicOn){ const p=bgm.play(); if(p&&p.catch)p.catch(()=>{}); } else bgm.pause(); } });
 
 /* ===================== Flutter 브리지 (엔진 API + 상태 전송) ===================== */
 let _lastSec=-1;
@@ -2160,6 +2182,7 @@ window.__HOLE = {
   snowTest(){ if(!SNOW||!snowBase) return 'not snow'; ball.vol=Math.pow((snowTarget+0.15)/START_R,3)-1; refreshBlue(); ball.x=snowBase.userData.x; ball.z=snowBase.userData.z; for(var i=0;i<40;i++) window.__HOLE.step(0.05); return JSON.stringify({ ended:ended, running:running, assembled: !!(snowAssemble&&snowAssemble.built) }); },
   warp(r){ ball.vol=Math.pow(r/START_R,3)-1; refreshActive(); },  // 공 크기 강제(테스트)
   get paused(){ return !running && !ended; },
+  get countdown(){ return Math.round(countdown*10)/10; }, get bgm(){ return bgmFile; },
   get holeTotal(){ return holeTotal; },
   holeColors(){ return spawners.map(function(s){ return {r:Math.round(s.r*100)/100, danger:s.grp.userData.danger}; }); },
   get hp(){ return Math.round(ball.hp); }, get chopper(){ return !!chopper; }, get bombs(){ return bombs.length; },
@@ -2223,11 +2246,20 @@ function updateTime(){
 }
 
 /* ===================== 루프 ===================== */
-let last=performance.now(), growMark=START_R;
+let last=performance.now(), growMark=START_R, _cdShown=-1;
+function updateCountdownUI(){
+  const el=document.getElementById('countdown'); if(!el) return;
+  if(countdown>0){ const n=Math.ceil(countdown); el.classList.add('show'); if(n!==_cdShown){ _cdShown=n; el.textContent=n; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); if(typeof tone==='function') tone(660,0.12,'square',0.16); } }
+  else if(_cdShown!==0){ _cdShown=0; el.textContent='시작!'; el.classList.add('show','pop'); if(typeof tone==='function') tone(990,0.2,'square',0.18); setTimeout(function(){ el.classList.remove('show'); }, 500); }
+}
 function loop(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   try{
-  if(running && !ended){
+  if(running && !ended && countdown>0){
+    // 3-2-1 카운트다운: 적·플레이어·타이머 전부 대기, 카메라만
+    countdown=Math.max(0,countdown-dt);
+    updateCamera(dt); updateCountdownUI();
+  } else if(running && !ended){
     if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0){ updateMapExtras(dt); updateFalling(dt); } else if(SNOW){ updateSnow(dt); updateFalling(dt); } }
     else if(MODE==='hole'){ updateHole(dt); updateAbsorbHole(dt); updateFalling(dt); }
     else { updateRoom(dt); updateFalling(dt); }
@@ -2298,7 +2330,7 @@ function beginRound(mode){
   MAP = mapId; MODE = mode;
   clearWorld();
   ball = { x:0, z:0, r:START_R, vol:0, area:Math.PI*START_R*START_R, heading:0, score:0, hp:300, hpMax:300 };
-  camYaw = 0;
+  camYaw = 0; countdown = 3.0; _cdShown = -1;   // 시작 3-2-1 카운트다운
   ballGroup.quaternion.identity();
   MAP_BOUND = (MAP>0) ? MAPS[MAP].bound-1 : GROUND-2;
   if(SNOW){
@@ -2314,7 +2346,7 @@ function beginRound(mode){
     document.getElementById('end').classList.add('hidden');
     running=true; ended=false; timeLeft=ROUND_TIME; growMark=START_R;
     if(gyroOn) recenterGyro();
-    initAudio(); setMapLighting('snow'); setAmbient('snow'); updateModeUI(); updateHUD(); updateTime();
+    initAudio(); setMapLighting('snow'); setAmbient('snow'); setMusic(trackFor()); updateModeUI(); updateHUD(); updateTime();
     return;
   }
   if(MAP>0){
@@ -2332,7 +2364,7 @@ function beginRound(mode){
     document.getElementById('end').classList.add('hidden');
     running=true; ended=false; timeLeft=ROUND_TIME; growMark=START_R;
     if(gyroOn) recenterGyro();
-    initAudio(); setMapLighting(['','room','yard','mart','school','city','grave'][MAP]); setAmbient(['','room','yard','mart','school','city','grave'][MAP]); updateModeUI(); updateHUD(); updateTime();
+    initAudio(); setMapLighting(['','room','yard','mart','school','city','grave'][MAP]); setAmbient(['','room','yard','mart','school','city','grave'][MAP]); setMusic(trackFor()); updateModeUI(); updateHUD(); updateTime();
     return;
   }
   const outdoor = (mode!=='room');
@@ -2358,10 +2390,11 @@ function beginRound(mode){
   document.getElementById('end').classList.add('hidden');
   running=true; ended=false; timeLeft=ROUND_TIME; growMark=START_R;
   if(gyroOn) recenterGyro();
-  initAudio(); setMapLighting('default'); setAmbient(mode==='room'?'room':'yard'); updateModeUI(); updateHUD(); updateTime();
+  initAudio(); setMapLighting('default'); setAmbient(mode==='room'?'room':'yard'); setMusic(trackFor()); updateModeUI(); updateHUD(); updateTime();
 }
 function finish(win, reason){
-  ended=true; running=false; endStick(); setAmbient('');
+  ended=true; running=false; endStick(); setAmbient(''); countdown=0;
+  { const cd=document.getElementById('countdown'); if(cd) cd.classList.remove('show'); }
   EMIT({ type:'over', win:!!win, mode: SNOW?'snow':MODE, size:fmtSizePlain(ball.r), sizeCm:Math.round(ball.r*100),
     count: MODE==='room'? (roomTotal-holes.length) : ball.score, roomTotal:roomTotal, reason:reason||'' });
   // Flutter 임베드 시 엔드카드는 Flutter가 표시 → 인게임 DOM 엔드카드는 생략(효과음만)

@@ -1160,6 +1160,23 @@ class _DialogueOverlayState extends State<_DialogueOverlay> {
               bottom: 6, left: 0, right: 0,
               child: Center(child: Text('▶ 탭하여 계속', style: TextStyle(color: Colors.white70, fontSize: 12))),
             ),
+            // 스킵 — 대사 건너뛰고 바로 시작
+            Positioned(
+              top: 8, right: 10,
+              child: Material(
+                color: const Color(0x66000000),
+                borderRadius: BorderRadius.circular(20),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: widget.onDone,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    child: Text('건너뛰기 ▶▶',
+                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800)),
+                  ),
+                ),
+              ),
+            ),
           ]),
         ),
       ),
