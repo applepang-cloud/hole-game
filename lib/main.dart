@@ -1176,10 +1176,10 @@ class _DialogueOverlayState extends State<_DialogueOverlay> {
           ),
           SafeArea(
           child: Stack(children: [
-            // 말풍선 — 말하는 캐릭터 머리 위에 표시
+            // 말풍선 — 말하는 캐릭터 이미지 위로(겹치지 않게)
             Positioned(
               left: 14, right: 14,
-              bottom: 24 + 225 + 8,   // 캐릭터(높이225, bottom24) 머리 바로 위
+              bottom: 24 + 237 + 16,   // 캐릭터(이미지225+패딩12, bottom24) 위로 띄움
               child: Align(
                 alignment: line.left ? Alignment.centerLeft : Alignment.centerRight,
                 child: _bubble(line),
