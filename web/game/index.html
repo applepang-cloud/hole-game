@@ -940,6 +940,7 @@ function spawnMonster(kind,x,z,fromHole){
   if(monsters.length>=MONSTER_CAP) return null;
   const grp=(MONSTER_BUILD[kind]||buildAnt)(); const size=grp.userData.size; const baseY=grp.userData.y||0;
   grp.position.set(x, fromHole? -size*1.8 : baseY, z); grp.rotation.y=Math.random()*Math.PI*2; scene.add(grp);
+  if(fromHole) spawnPuff(x,z);   // 솟아날 때 흙먼지
   const m={ grp, x, z, size, kind, baseY, dir:Math.random()*Math.PI*2, speed:rand(1.2,2.6), turn:rand(0.6,1.6), bob:Math.random()*6.28, climb: fromHole?1:0, atkCd:rand(0.5,1.5) };
   monsters.push(m); return m;
 }
@@ -948,10 +949,20 @@ function monDmg(kind){ return kind==='reaper'?14: kind==='zombie'?10: kind==='go
 function updateMonsters(dt){
   const bound=MAP_BOUND-0.5;
   for(let i=monsters.length-1;i>=0;i--){ const m=monsters[i];
-    if(m.climb>0) m.climb=Math.max(0,m.climb-dt/0.6);
     if(m.atkCd>0) m.atkCd-=dt;
+    // 구멍에서 솟아오르는 중 — 그 자리서 버둥대며 이징 상승, 구멍 통과하듯 짜부→펴짐
+    if(m.climb>0){
+      m.climb=Math.max(0,m.climb-dt/0.75);
+      const cl=m.climb, ey=1-cl*cl; m.bob+=dt*14;
+      const wob=Math.sin(m.bob)*0.18*cl;
+      m.grp.position.set(m.x+wob, m.baseY - m.size*1.7*(1-ey), m.z);
+      m.grp.rotation.y=m.dir + wob*0.8;
+      m.grp.scale.set(1+0.32*cl, 1-0.42*cl, 1+0.32*cl);
+      if(m.climb<=0) m.grp.scale.set(1,1,1);
+      continue;
+    }
     const toB=Math.hypot(ball.x-m.x, ball.z-m.z);
-    if(toB<AGGRO && m.climb<=0){ // 추격
+    if(toB<AGGRO){ // 추격
       m.dir = Math.atan2(ball.x-m.x, ball.z-m.z) + (Math.random()-0.5)*0.4;
     } else { m.dir += (Math.random()-0.5)*m.turn*dt; }
     const sp = m.speed*(toB<AGGRO?1.35:1);
@@ -960,8 +971,7 @@ function updateMonsters(dt){
     if(nz<-bound||nz>bound){ m.dir=Math.PI-m.dir; nz=clamp(nz,-bound,bound); }
     m.x=nx; m.z=nz; m.bob+=dt*9;
     const floatY=(m.kind==='ghost')? 0.5+Math.sin(m.bob)*0.2 : Math.abs(Math.sin(m.bob))*0.07;
-    const climbY=(m.climb>0)? -m.size*1.8*m.climb : 0;
-    m.grp.position.set(nx, m.baseY+floatY+climbY, nz); m.grp.rotation.y=m.dir;
+    m.grp.position.set(nx, m.baseY+floatY, nz); m.grp.rotation.y=m.dir;
     const d=Math.hypot(m.x-ball.x,m.z-ball.z), reach=ball.r+m.size*0.7+0.05;
     if(m.climb<=0){
       if(d<reach && ball.r>=m.size*FLATTEN_RATIO){ monsters.splice(i,1); squash(m.grp,m.x,m.z,m.size,0.5); SFX.scream(); continue; } // 깔아뭉갬 → 으악!
@@ -1350,6 +1360,7 @@ function spawnSnowEnemy(kind,x,z,fromHole){
   if(snowMovers.length>=MONSTER_CAP) return;
   const g=(SNOW_BUILD[kind]||buildPenguin)(); const size=g.userData.size;
   g.position.set(x, fromHole?-size*1.8:0, z); g.rotation.y=Math.random()*6.28; scene.add(g);
+  if(fromHole) spawnPuff(x,z);   // 얼음 구멍서 솟을 때 눈보라
   snowMovers.push({ grp:g, x, z, size, kind, dir:Math.random()*6.28, speed:rand(1.0,2.2), bob:Math.random()*6.28,
     climb:fromHole?1:0, meleeCd:rand(0.5,1.5), throwCd:rand(2,5), ranged:(kind==='penguin'||kind==='sailor') });
 }
@@ -1424,19 +1435,27 @@ function updateBallSnow(dt){
 function updateSnow(dt){
   const bound=MAP_BOUND-0.5;
   for(let i=snowMovers.length-1;i>=0;i--){ const m=snowMovers[i];
-    if(m.climb>0) m.climb=Math.max(0,m.climb-dt/0.6);
     if(m.meleeCd>0) m.meleeCd-=dt; if(m.throwCd>0) m.throwCd-=dt;
+    // 얼음 구멍에서 솟아오르는 중 — 그 자리서 버둥대며 이징 상승
+    if(m.climb>0){
+      m.climb=Math.max(0,m.climb-dt/0.75);
+      const cl=m.climb; m.bob+=dt*14;
+      const wob=Math.sin(m.bob)*0.18*cl;
+      m.grp.position.set(m.x+wob, -(m.size*1.7)*cl*cl, m.z);   // ease-out 상승
+      m.grp.rotation.y=m.dir+wob*0.8;
+      m.grp.scale.set(1+0.32*cl,1-0.42*cl,1+0.32*cl);
+      if(m.climb<=0) m.grp.scale.set(1,1,1);
+      continue;
+    }
     const toB=Math.hypot(ball.x-m.x,ball.z-m.z);
-    if(toB<10 && m.climb<=0) m.dir=Math.atan2(ball.x-m.x,ball.z-m.z)+(Math.random()-0.5)*0.5;
+    if(toB<10) m.dir=Math.atan2(ball.x-m.x,ball.z-m.z)+(Math.random()-0.5)*0.5;
     else m.dir+=(Math.random()-0.5)*1.2*dt;
     const spd=m.speed*(toB<10?1.2:1);
     let nx=m.x+Math.sin(m.dir)*spd*dt, nz=m.z+Math.cos(m.dir)*spd*dt;
     if(nx<-bound||nx>bound){ m.dir=-m.dir; nx=clamp(nx,-bound,bound); }
     if(nz<-bound||nz>bound){ m.dir=Math.PI-m.dir; nz=clamp(nz,-bound,bound); }
     m.x=nx; m.z=nz; m.bob+=dt*8;
-    const cy=(m.climb>0)?-m.size*1.8*m.climb:Math.abs(Math.sin(m.bob))*0.06;
-    m.grp.position.set(nx,cy,nz); m.grp.rotation.y=m.dir;
-    if(m.climb>0) continue;
+    m.grp.position.set(nx,Math.abs(Math.sin(m.bob))*0.06,nz); m.grp.rotation.y=m.dir;
     const d=Math.hypot(nx-ball.x,nz-ball.z), reach=ball.r+m.size*0.7+0.05;
     if(d<reach && ball.r>=m.size*1.05){   // 충분히 크면 흡수
       snowMovers.splice(i,1);
