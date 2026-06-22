@@ -65,67 +65,73 @@ class MapStory {
 // 주인공: 변신 전 학생(student) → 퇴마사 소년(exorcist). 엄마=teacher2(이미지 재사용).
 /// 맵 번호별 시작/종료 대사 (퇴마사 소년 스토리)
 const kStory = <int, MapStory>{
-  // 맵1 내 방 — 어머니가 가문의 비밀을 알려주고 퇴마사로 변신
+  // 맵1 내 방 — 어머니의 폭로 + 변신 (좀 능청스러운 사춘기 아들)
   1: MapStory([
-    StoryLine(true, 'teacher2', '엄마', '도현아, 엄마가 꼭 해줄 이야기가 있단다.'),
-    StoryLine(false, 'student', '도현', '응? 갑자기 무슨 얘기야, 엄마?'),
-    StoryLine(true, 'teacher2', '엄마', '사실 우리 가족은… 대대로 악령을 쫓는 퇴마사 가문이란다.'),
-    StoryLine(false, 'student', '도현', '퇴마사…? 그런 게 정말 있어?'),
-    StoryLine(true, 'teacher2', '엄마', '요즘 마을 곳곳에 싱크홀이 생기고 있어. 그 구멍에서 악령의 기운이 새어나온단다.'),
-    StoryLine(true, 'teacher2', '엄마', '너는 네 아버지의 대를 잇는 퇴마사야. 자, 이 옷을 입으렴.'),
-    StoryLine(false, 'exorcist', '퇴마사 도현', '…옷을 입으니 온몸에 힘이 솟아! 내가 막을게요, 엄마!'),
+    StoryLine(true, 'teacher2', '엄마', '도현아, 잠깐 앉아봐. 진지한 얘기야.'),
+    StoryLine(false, 'student', '도현', '또 방 치우라는 거지? 이따 한다니까…'),
+    StoryLine(true, 'teacher2', '엄마', '아니. 우리 집안은 대대로 악령을 쫓는 「퇴마사」 가문이란다.'),
+    StoryLine(false, 'student', '도현', '…엄마 또 밤새 드라마 봤구나.'),
+    StoryLine(true, 'teacher2', '엄마', '요즘 마을에 싱크홀 자꾸 생기지? 그 구멍마다 악령의 기운이 흘러나와.'),
+    StoryLine(true, 'teacher2', '엄마', '이건 네 아버지가 쓰던 퇴마복이야. 이제 네 차례란다.'),
+    StoryLine(false, 'student', '도현', '에이 설마… 어? 옷이 저절로 빛나는데?!'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '뭐야 이거… 힘이 솟잖아! …나 좀, 멋있는데?'),
   ], [
-    StoryLine(false, 'exorcist', '퇴마사 도현', '내 방의 싱크홀을 전부 메웠어요!'),
-    StoryLine(true, 'teacher2', '엄마', '잘했어. 하지만 이건 시작일 뿐이란다.'),
-    StoryLine(true, 'teacher2', '엄마', '마당에도 구멍이 번지고 있어. 어서 가보자.'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '방 안 싱크홀, 깔끔하게 봉인 완료!'),
+    StoryLine(true, 'teacher2', '엄마', '역시 내 아들. 근데 책상 밑은 아직 안 치웠더라?'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '…엄마, 그건 악령이 아니라 그냥 내 양말이야.'),
+    StoryLine(true, 'teacher2', '엄마', '암튼! 마당으로 번지고 있어. 어서 가자.'),
   ]),
-  // 맵2 마당 — 엄마와 함께
+  // 맵2 마당 — 엄마의 잔소리 + 자신감 붙는 도현
   2: MapStory([
-    StoryLine(true, 'teacher2', '엄마', '마당 바닥이 갈라지고 구멍이 생겼어!'),
-    StoryLine(false, 'exorcist', '퇴마사 도현', '유령이 기어나오기 전에 구멍부터 막을게요.'),
-    StoryLine(true, 'teacher2', '엄마', '조심하렴. 악령은 점점 강해진단다.'),
+    StoryLine(true, 'teacher2', '엄마', '잔디 사이로 구멍이 뽕뽕! 유령이 스멀스멀 올라와!'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '걱정 마. 한 판 굴렸더니 감 잡았어.'),
+    StoryLine(true, 'teacher2', '엄마', '자만 말고! 옆집 화단은 밟지 마라, 또 변상해야 해.'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '엄마, 나 지금 세계를 구하는 중이라고…'),
   ], [
-    StoryLine(false, 'exorcist', '퇴마사 도현', '마당의 구멍, 전부 봉인 완료!'),
-    StoryLine(true, 'teacher2', '엄마', '역시 내 아들. 다음은 마트로 가보렴.'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '마당 구멍 전부 봉인! 화단도 무사하고.'),
+    StoryLine(true, 'teacher2', '엄마', '장하다 우리 아들. 마트 사장님이 도와달라고 난리야.'),
   ]),
-  // 맵3 마트 — 마트 사장님
+  // 맵3 마트 — 능청 사장님
   3: MapStory([
-    StoryLine(true, 'shop1', '마트 사장', '퇴마사님! 마트 바닥 구멍에서 좀비가 쏟아져 나와요!'),
-    StoryLine(false, 'exorcist', '퇴마사 도현', '걱정 마세요. 구멍부터 막으면 멈춥니다.'),
-    StoryLine(true, 'shop2', '마트 사장', '부탁드려요, 손님들이 위험해요!'),
+    StoryLine(true, 'shop1', '마트 사장', '퇴마사님!! 좀비가 1+1 시식코너를 싹 다 먹어치웠어요!'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '구멍부터 막죠. 좀비는 공짜를 못 참거든요.'),
+    StoryLine(true, 'shop2', '마트 사장', '냉동코너에서 자꾸 기어나와요, 빨리요 빨리!'),
   ], [
-    StoryLine(false, 'exorcist', '퇴마사 도현', '좀비 구멍 전부 봉인했습니다.'),
-    StoryLine(true, 'shop2', '마트 사장', '정말 감사해요! 학교도 위험하다던데…'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '좀비 구멍 봉인 끝. 시식은… 좀 늦었네요.'),
+    StoryLine(true, 'shop2', '마트 사장', '그래도 살았어요! 학교 선생님이 SOS 보냈대요.'),
   ]),
-  // 맵4 학교 — 선생님
+  // 맵4 학교 — 선생님과 티키타카
   4: MapStory([
-    StoryLine(true, 'teacher1', '선생님', '퇴마사님, 학교에 도깨비와 해골이 나타났어요!'),
-    StoryLine(false, 'exorcist', '퇴마사 도현', '아이들은 제가 지키겠습니다. 구멍을 막죠.'),
-    StoryLine(true, 'teacher1', '선생님', '부디 학생들을 부탁드려요!'),
+    StoryLine(true, 'teacher1', '선생님', '도현 학생! 마침 잘 왔어요. 도깨비가 칠판에 낙서를…'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '선생님, 저 이제 학생 아니고 퇴마사예요.'),
+    StoryLine(true, 'teacher1', '선생님', '그럼 결석 처리할게요. …농담이에요, 부탁해요!'),
   ], [
-    StoryLine(false, 'exorcist', '퇴마사 도현', '교실의 구멍, 정리 끝!'),
-    StoryLine(true, 'teacher1', '선생님', '고마워요. 도시 쪽도 심상치 않대요.'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '교실 구멍 정리 끝! 도깨비도 하교시켰습니다.'),
+    StoryLine(true, 'teacher1', '선생님', '역시! 근데 도시가 난리래요. 조심해요.'),
   ]),
-  // 맵5 도시 — 시민(+도시 선생님)
+  // 맵5 도시 — 큰 위협의 전조 + 아버지 떡밥
   5: MapStory([
-    StoryLine(true, 'citizen', '시민', '퇴마사님! 도시 거리가 온통 구멍투성이예요!'),
-    StoryLine(false, 'exorcist', '퇴마사 도현', '사람들을 대피시키세요. 제가 막겠습니다.'),
-    StoryLine(true, 'cityteacher2', '도시 선생님', '저도 봤어요, 구멍에서 도깨비가 튀어나와요!'),
+    StoryLine(true, 'citizen', '시민', '퇴마사님! 도시가 통째로 가라앉을 판이에요!'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '사람들 대피시키세요. 큰 놈이… 느껴진다.'),
+    StoryLine(true, 'cityteacher2', '도시 선생님', '맞아요, 묘지 쪽 기운이 제일 사나워요.'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '역시 마지막은 거기군. 아버지가 마지막으로 향한 곳…'),
   ], [
-    StoryLine(false, 'exorcist', '퇴마사 도현', '도시의 구멍, 전부 봉인!'),
-    StoryLine(true, 'citizen', '시민', '영웅이세요! 마지막은… 공동묘지라고 들었어요.'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '도시 봉인 완료. 이제 진짜 마지막이다.'),
+    StoryLine(true, 'citizen', '시민', '꼭 살아 돌아오셔야 해요!'),
   ]),
-  // 맵6 공동묘지 — 좀비 등장 후 묘지기와 대화
+  // 맵6 공동묘지 — 좀비 → 묘지기, 아버지의 진실
   6: MapStory([
-    StoryLine(true, 'zombie1', '좀비', '크아아아…!'),
-    StoryLine(false, 'exorcist', '퇴마사 도현', '윽…! 악령의 기운이 가장 짙은 곳이다…!'),
-    StoryLine(true, 'keeper', '묘지기', '퇴마사여. 자네를 기다리고 있었네.'),
-    StoryLine(true, 'keeper', '묘지기', '이곳의 싱크홀을 막지 못하면 마을 전체가 삼켜진다네.'),
-    StoryLine(false, 'exorcist', '퇴마사 도현', '아버지의 대를 잇는 자로서, 반드시 막겠습니다!'),
+    StoryLine(true, 'zombie1', '좀비', '크아아아—!'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '윽…! 여기, 악령의 기운이 가장 짙어…!'),
+    StoryLine(true, 'keeper', '묘지기', '기다렸네, 젊은 퇴마사여. 자네… 그 사람의 아들이군.'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '…아버지를, 아세요?'),
+    StoryLine(true, 'keeper', '묘지기', '이곳을 지키다 봉인 속으로 사라졌지. 이젠 자네 차례다.'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '알겠어요. 아버지가 못 끝낸 일, 제가 끝낼게요!'),
   ], [
-    StoryLine(false, 'exorcist', '퇴마사 도현', '모든 싱크홀을 봉인했다! 악령은 물러갔다.'),
-    StoryLine(true, 'keeper', '묘지기', '훌륭하네. 자네는 진정한 퇴마사야.'),
-    StoryLine(true, 'keeper', '묘지기', '이제 마을은 안전하네. 집으로 돌아가게.'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '모든 싱크홀을 봉인했다! 악령은 물러갔어.'),
+    StoryLine(true, 'keeper', '묘지기', '해냈군. 자네 아버지가 무척 자랑스러워할 게야.'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '…고마워요. 이제 집에 가서, 양말부터 치워야겠어요.'),
+    StoryLine(true, 'keeper', '묘지기', '허허, 진정한 퇴마사로군.'),
   ]),
 };
 
