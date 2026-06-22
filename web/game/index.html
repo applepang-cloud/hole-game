@@ -952,6 +952,32 @@ function buildFreezer(){ const g=new THREE.Group();
   const b=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.9,0.9),MAT(0xeef3f7)); b.position.y=0.45; g.add(b);
   const glass=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.1,0.8),new THREE.MeshPhongMaterial({color:0xbfe6ff,transparent:true,opacity:0.7})); glass.position.y=0.92; g.add(glass);
   addShadow(g,1.0); return tag(g,1.0,0); }
+/* ===== 맵별 '큰 물체'(미션 막바지에 깔아뭉개는 트로피) ===== */
+function buildBigFridge(){ const g=new THREE.Group();   // 양문형 냉장고
+  const body=new THREE.Mesh(new THREE.BoxGeometry(2.0,3.4,1.7),SMAT(0xeef3f7,30,0x99aabb)); body.position.y=1.7; g.add(body);
+  for(const sx of[-1,1]){ const door=new THREE.Mesh(new THREE.BoxGeometry(0.94,3.2,0.12),SMAT(0xdfe8ef,40,0xbcd)); door.position.set(sx*0.5,1.7,0.88); g.add(door);
+    const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,2.2,8),SMAT(0x9aa6b0,60)); handle.position.set(sx*0.12,1.7,0.98); g.add(handle); }
+  const seam=new THREE.Mesh(new THREE.BoxGeometry(0.04,3.2,0.14),MAT(0x9aa6b0)); seam.position.set(0,1.7,0.9); g.add(seam);
+  addShadow(g,2.0); return tag(g,2.2,0); }
+function buildAircon(){ const g=new THREE.Group();   // 세워진 긴 에어컨(스탠드형)
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1.0,3.6,0.8),SMAT(0xf4f6f8,28,0xccd)); body.position.y=1.8; g.add(body);
+  const top=new THREE.Mesh(new THREE.BoxGeometry(1.06,0.5,0.86),SMAT(0xdfe6ec,28)); top.position.y=3.45; g.add(top);
+  for(let i=0;i<5;i++){ const v=new THREE.Mesh(new THREE.BoxGeometry(0.86,0.06,0.05),MAT(0xaeb8c0)); v.position.set(0,2.7-i*0.28,0.42); g.add(v); }
+  const disp=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.3,0.04),GLOW?GLOW(0x49d0f5):MAT(0x49d0f5)); disp.position.set(0,2.0,0.43); g.add(disp);
+  addShadow(g,1.2); return tag(g,2.0,0); }
+function buildBigHouse(){ const g=new THREE.Group();   // 큰 주택
+  const w=new THREE.Mesh(new THREE.BoxGeometry(4.2,3.0,4.0),SMAT(0xe9d8b8,16,0x665)); w.position.y=1.5; g.add(w);
+  const roof=new THREE.Mesh(new THREE.ConeGeometry(3.6,2.0,4),MAT(0xb4543a)); roof.position.y=4.0; roof.rotation.y=Math.PI/4; g.add(roof);
+  const door=new THREE.Mesh(new THREE.BoxGeometry(0.9,1.6,0.1),MAT(0x7a4a2a)); door.position.set(0,0.8,2.02); g.add(door);
+  for(const sx of[-1.2,1.2]){ const win=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.08),SMAT(0xbfe6ff,80,0xffffff)); win.position.set(sx,1.7,2.02); g.add(win); }
+  addShadow(g,3.0); return tag(g,2.7,0); }
+function buildVilla(){ const g=new THREE.Group();   // 더 큰 빌라(3층)
+  const cols=[0xd8c9b0,0xc9d2dc,0xd0bfae];
+  for(let f=0;f<3;f++){ const fl=new THREE.Mesh(new THREE.BoxGeometry(4.6,1.7,4.2),SMAT(cols[f],16,0x665)); fl.position.y=0.85+f*1.7; g.add(fl);
+    for(let wx=-1;wx<=1;wx++){ const win=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.9,0.08),SMAT(0x9fd6ef,70,0xffffff)); win.position.set(wx*1.4,0.95+f*1.7,2.12); g.add(win); }
+    const bal=new THREE.Mesh(new THREE.BoxGeometry(4.7,0.12,0.5),MAT(0xbfb8a8)); bal.position.set(0,0.2+f*1.7,2.3); g.add(bal); }
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(4.8,0.4,4.4),MAT(0x8a7f6a)); roof.position.y=5.3; g.add(roof);
+  addShadow(g,3.4); return tag(g,3.3,0); }
 function buildWindowGhost(){ const grp=new THREE.Group();
   const m=new THREE.MeshBasicMaterial({color:0xeaf6ff,transparent:true,opacity:0,depthWrite:false,fog:false});
   const em=new THREE.MeshBasicMaterial({color:0x0a0a12,transparent:true,opacity:0,depthWrite:false,fog:false});
@@ -973,8 +999,8 @@ function addFlat(grp,x,z,sc){
 }
 function squash(grp,x,z,size,growK){
   splats.push({ grp, t:0, dur:0.30 });
-  // 일반 물체 깔아뭉개기 → 크기 조금만 증가
-  ball.vol += Math.pow(size,3)*ABSORB*(growK==null?0.35:growK);
+  // 일반 물체 깔아뭉개기 → 아주 조금만 증가(싱크홀 제거가 주 성장원)
+  ball.vol += Math.pow(size,3)*ABSORB*(growK==null?0.09:growK);
   ball.score++; refreshActive(); SFX.squash(); updateHUD();
 }
 /* 맵: 작은 물건은 파란 볼 밑으로 빨려들어 사라지며 성장(붙지 않음) */
@@ -982,8 +1008,8 @@ function mapSwallow(item){
   loose.splice(loose.indexOf(item),1);
   falling.push({ grp:item.grp, x0:item.x, z0:item.z, y0:(item.y||0.15)+0.1, t:0, dur:0.4,
     spin:rand(4,9), tilt:rand(3,7), toY:Math.max(0.3,ball.r*0.5) });
-  // 일반 물건 빨아들이기 → 크기 조금만 증가
-  ball.vol += Math.pow(item.size,3)*ABSORB*0.4; ball.score++;
+  // 일반 물건 빨아들이기 → 아주 조금만 증가
+  ball.vol += Math.pow(item.size,3)*ABSORB*0.09; ball.score++;
   refreshBlue(); SFX.pop(ball.score); updateHUD();
 }
 function updateSplats(dt){
@@ -1284,7 +1310,10 @@ function populateMap(id){
   const prop = (fn,n,a,b)=>{ for(let i=0;i<n;i++) addProp(fn(), P(), P(), rand(a||0.8,b||1.6)); };
   const smallN = (id===2||id===5)?90 : 64;
   for(let i=0;i<smallN;i++){ const mk=SMALL_MAKERS[(Math.random()*SMALL_MAKERS.length)|0]; addProp(mk(), P(), P(), rand(0.7,2.0)); }
+  // 큰 물체 — 미션 막바지(공이 커진 뒤)에야 깔아뭉갤 수 있는 트로피
+  const big=(fn,sc)=>{ const p=Pc(4); addFlat(fn(), p[0], p[1], sc||1); };
   if(id===1){
+    big(buildBigFridge); big(buildAircon);                 // 양문형 냉장고·긴 에어컨
     flat(buildBed,2,2.5,0.8,1.2); flat(buildDesk,3,2,0.8,1.4); flat(buildKitchenTable,2,2,0.8,1.3);
     flat(buildChair,6,1.5,0.8,1.4); flat(buildLamp,3,1.5,0.8,1.3); flat(buildBookStack,10,0,0.7,1.9);
     flat(buildFan,2,1.5,0.85,1.2);   // 선풍기
@@ -1295,6 +1324,7 @@ function populateMap(id){
     for(let i=0;i<4;i++) addSpawner(P(),P(),rand(0.35,0.6),null,0);
     for(let i=0;i<3;i++){ const p=Pc(2); addSpawner(p[0],p[1],rand(0.9,1.4),'ant',rand(3,5)); }
   } else if(id===2){
+    big(buildBigHouse); big(buildVilla);                   // 큰 주택·더 큰 빌라
     flat(buildTree,10,2,0.8,1.7); flat(buildBush,12,0,0.8,1.6); prop(buildFlower,22,0.8,1.9);
     flat(buildHouse,3,3,0.85,1.2); flat(buildGarage,1,3,0.9,1.1); flat(buildCar,3,2,0.85,1.3);
     flat(buildBicycle,2,1.5,0.9,1.3); flat(buildMailbox,5,0,0.8,1.4); flat(buildLamp,4,0,0.8,1.3);
@@ -1303,12 +1333,14 @@ function populateMap(id){
     for(let i=0;i<4;i++) addSpawner(P(),P(),rand(0.4,0.6),null,0);
     for(let i=0;i<6;i++){ const p=Pc(2.5); addSpawner(p[0],p[1],rand(0.9,1.6),i%2?'ghost':'pumpkin',rand(3,5)); }
   } else if(id===3){
+    big(buildFreezer,2.4); big(buildShelf,2.3);            // 대형 냉동고·창고 선반
     flat(buildShelf,10,2,0.8,1.4); flat(buildCart,8,1,0.8,1.5); flat(buildFreezer,4,2,0.85,1.3);
     flat(buildChair,4,0,0.8,1.3); prop(buildApple,8,0.8,2.0); prop(buildOrange,8,0.8,2.0); prop(buildMug,6,0.8,1.8);
     for(let i=0;i<5;i++) addSpawner(P(),P(),rand(0.4,0.6),null,0);
     for(let i=0;i<6;i++){ const p=Pc(2.5); addSpawner(p[0],p[1],rand(1.0,1.6),'zombie',rand(2.5,4)); }
     for(let i=0;i<3;i++){ const p=Pc(3); addConveyor(p[0],p[1],rand(5,8),3.2,Math.random()*Math.PI*2); }   // 🛒 컨베이어 벨트
   } else if(id===4){
+    big(buildLocker,2.6); big(buildBlackboard,2.4);        // 대형 사물함·칠판
     flat(buildDesk,8,1.5,0.8,1.4); flat(buildChair,8,1,0.8,1.4); flat(buildLocker,7,2,0.85,1.3);
     flat(buildBlackboard,2,3,0.9,1.2); flat(buildBookStack,10,0,0.7,1.8);
     prop(buildBasketball,8,0.8,1.8); prop(buildLunchTray,8,0.8,1.6);
@@ -1318,6 +1350,7 @@ function populateMap(id){
     for(let i=0;i<6;i++){ const p=Pc(2.5); addSpawner(p[0],p[1],rand(0.9,1.5),i%2?'skeleton':'goblin',rand(2.8,4.2)); }
     for(let i=0;i<4;i++){ const p=Pc(3); addBoostPad(p[0],p[1],Math.random()*Math.PI*2); }   // 🏫 부스터 발판
   } else if(id===5){
+    big(buildBuilding,2.6); big(buildBus,2.2);             // 대형 빌딩·큰 버스
     flat(buildBuilding,8,3,0.8,1.5); flat(buildCar,6,1.5,0.85,1.3); flat(buildBus,3,2.5,0.9,1.2);
     flat(buildTrafficLight,5,0,0.8,1.3); flat(buildBench,6,0,0.8,1.4); flat(buildLamp,6,0,0.8,1.3);
     flat(buildMailbox,5,0,0.8,1.4); flat(buildTree,5,1,0.8,1.4);
@@ -1328,6 +1361,7 @@ function populateMap(id){
     // 🏙️ 달리는 자동차(도로 따라 — 십자 양방향)
     for(const a of [0,Math.PI,Math.PI/2,-Math.PI/2,0,Math.PI/2]) addTrafficCar(a);
   } else {
+    big(buildGravestone,2.8); big(buildDeadTree,2.5);      // 거대 비석·고목
     flat(buildGravestone,14,1,0.8,1.6); flat(buildDeadTree,8,1.5,0.8,1.5); flat(buildTorch,10,0,0.8,1.4);
     flat(buildBench,3,0,0.8,1.3);
     for(let i=0;i<5;i++) spawnMonster('skeleton',P(),P(),false);
@@ -2095,7 +2129,7 @@ function setMusic(file){
   if(!file) return;
   if(!bgm){ bgm=new Audio(); bgm.loop=true; bgm.volume=0.45; bgm.preload='auto'; }
   if(bgmFile!==file){ bgmFile=file; bgm.src=MUSIC_BASE+file; try{ bgm.load(); }catch(_){} }
-  if(musicOn){ const p=bgm.play(); if(p&&p.catch) p.catch(()=>{}); } else { bgm.pause(); }
+  if(musicOn){ try{ bgm.currentTime=0; }catch(_){}  const p=bgm.play(); if(p&&p.catch) p.catch(()=>{}); } else { bgm.pause(); }
 }
 function tone(freq,dur,type,gain,slide){
   if(!actx||!soundOn) return; const t=actx.currentTime;
@@ -2243,6 +2277,8 @@ window.__HOLE = {
   warp(r){ ball.vol=Math.pow(r/START_R,3)-1; refreshActive(); },  // 공 크기 강제(테스트)
   get paused(){ return !running && !ended; },
   get countdown(){ return Math.round(countdown*10)/10; }, get bgm(){ return bgmFile; },
+  get timeLeft(){ return Math.round(timeLeft); }, get bgmPaused(){ return !!(bgm&&bgm.paused); },
+  bigObjects(){ return loose.filter(function(o){return o.kind==='flat'&&o.size>=1.8;}).map(function(o){return Math.round(o.size*10)/10;}).sort(); },
   get holeTotal(){ return holeTotal; },
   holeColors(){ return spawners.map(function(s){ return {r:Math.round(s.r*100)/100, danger:s.grp.userData.danger}; }); },
   get hp(){ return Math.round(ball.hp); }, get chopper(){ return !!chopper; }, get bombs(){ return bombs.length; },
@@ -2384,6 +2420,8 @@ function clearWorld(){
   blueBall.scale.setScalar(1); blueBall.quaternion.identity();
   ballGroup.scale.setScalar(1);
 }
+// 맵별 제한시간: 맵1=60·맵2=90·맵3,4=120·맵5,6=150 / 이벤트=120
+function roundTimeFor(){ if(MAP>0) return [0,60,90,120,120,150,150][MAP]; return 120; }
 function beginRound(mode){
   // 맵 모드(map1~6) → 롤 메커니즘 + 테마 레벨 / snow → 눈사람 만들기 이벤트
   let mapId=0; const mm=/^map([1-6])$/.exec(mode||'');
@@ -2406,7 +2444,7 @@ function beginRound(mode){
     populateSnow();
     document.getElementById('start').classList.add('hidden');
     document.getElementById('end').classList.add('hidden');
-    running=true; ended=false; timeLeft=ROUND_TIME; growMark=START_R;
+    running=true; ended=false; timeLeft=roundTimeFor(); growMark=START_R;
     if(gyroOn) recenterGyro();
     initAudio(); setMapLighting('snow'); setAmbient('snow'); setMusic(trackFor()); updateModeUI(); updateHUD(); updateTime();
     return;
@@ -2424,7 +2462,7 @@ function beginRound(mode){
     spawnChopper();                // 공중 공격 헬기
     document.getElementById('start').classList.add('hidden');
     document.getElementById('end').classList.add('hidden');
-    running=true; ended=false; timeLeft=ROUND_TIME; growMark=START_R;
+    running=true; ended=false; timeLeft=roundTimeFor(); growMark=START_R;
     if(gyroOn) recenterGyro();
     initAudio(); setMapLighting(['','room','yard','mart','school','city','grave'][MAP]); setAmbient(['','room','yard','mart','school','city','grave'][MAP]); setMusic(trackFor()); updateModeUI(); updateHUD(); updateTime();
     return;
@@ -2450,12 +2488,13 @@ function beginRound(mode){
   if(mode==='room') populateRoom(); else populate();
   document.getElementById('start').classList.add('hidden');
   document.getElementById('end').classList.add('hidden');
-  running=true; ended=false; timeLeft=ROUND_TIME; growMark=START_R;
+  running=true; ended=false; timeLeft=roundTimeFor(); growMark=START_R;
   if(gyroOn) recenterGyro();
   initAudio(); setMapLighting('default'); setAmbient(mode==='room'?'room':'yard'); setMusic(trackFor()); updateModeUI(); updateHUD(); updateTime();
 }
 function finish(win, reason){
   ended=true; running=false; endStick(); setAmbient(''); countdown=0;
+  if(bgm){ bgm.pause(); }   // 클리어/종료 시 배경음악 정지 → 클리어 사운드(SFX.win)
   { const cd=document.getElementById('countdown'); if(cd) cd.classList.remove('show'); }
   EMIT({ type:'over', win:!!win, mode: SNOW?'snow':MODE, size:fmtSizePlain(ball.r), sizeCm:Math.round(ball.r*100),
     count: MODE==='room'? (roomTotal-holes.length) : ball.score, roomTotal:roomTotal, reason:reason||'' });
