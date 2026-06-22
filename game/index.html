@@ -1085,11 +1085,11 @@ function freeSpotNear(x,z,r,gap){
   regOccupy(x,z,r); return [x,z];
 }
 /* --- 바닥 구멍: 작으면 덮어 메우고(메꾸기), 나보다 크면 빠진다(실패). kind 있으면 몬스터 생성 --- */
-function addSpawner(x,z,r,kind,interval){
-  r = Math.min(r*HSCALE, 0.68);              // 구멍 크기 축소 + 상한(작은 볼로도 클리어 가능)
+function addSpawner(x,z,r,kind,interval,mega){
+  r = mega ? r : Math.min(r*HSCALE, 0.68);   // 일반은 축소+상한 / 메가는 그대로(큰 구멍, 채우면 크게 부풂)
   const sp=freeSpotNear(x,z,r);  x=sp[0]; z=sp[1];   // 다른 구멍·큰 물체와 안 겹치게
   const grp=buildHoleMesh(r); grp.position.set(x,0,z); scene.add(grp);
-  spawners.push({ grp,x,z,r,kind,interval:interval||0, t:Math.random()*(interval||1), alive:true });
+  spawners.push({ grp,x,z,r,kind,interval:interval||0, t:Math.random()*(interval||1), alive:true, mega:!!mega });
 }
 function fallInRoll(s){
   if(ended) return;
@@ -1106,8 +1106,9 @@ function updateSpawners(dt){
       if(d < ball.r*0.85){
         spawnPuff(s.x,s.z); spawnPuff(s.x,s.z); scene.remove(s.grp); spawners.splice(i,1);
         // 구멍 크기별 성장: 작은 구멍은 아주 조금(현재의 ~25%), 큰 구멍은 좀 더(현재의 50%)
-        const gmul = clamp(0.45 + (s.r-0.4)/0.5*0.3, 0.45, 0.75);   // 작은 구멍 적게·큰 구멍 더
-        ball.vol += (0.8 + s.r*s.r*s.r)*1.08*gmul; ball.score++; refreshActive(); SFX.loot(); updateHUD();   // 구멍 흡수 성장 1.2배
+        if(s.mega){ ball.vol += (1+ball.vol)*0.6 + 3; }   // 메가 구멍 — 볼이 크게 부풀어 침대까지 뭉갬
+        else { const gmul = clamp(0.45 + (s.r-0.4)/0.5*0.3, 0.45, 0.75); ball.vol += (0.8 + s.r*s.r*s.r)*1.08*gmul; }   // 작은 구멍 적게·큰 구멍 더(1.2배)
+        ball.score++; refreshActive(); SFX.loot(); updateHUD();
         if(MAP>0 && spawners.length===0 && !ended) finish(true);   // 맵: 모든 구멍 제거 → 클리어(눈사람 모드는 제외)
         continue;
       }
@@ -1349,6 +1350,7 @@ function populateMap(id){
     for(let i=0;i<6;i++){ const p=Pc(2); addSpawner(p[0],p[1],rand(0.9,1.4),'ant',rand(3,5)); }
     for(let i=0;i<2;i++){ const p=Pc(2); addSpawner(p[0],p[1],rand(0.9,1.15),null,0); }        // 중간 구멍 추가(맵1)
     for(let i=0;i<3;i++) addSpawner(P(),P(),rand(1.4,1.7),null,0);                             // 큰 빠지는 구멍
+    for(let i=0;i<3;i++){ const p=Pc(3); addSpawner(p[0],p[1],rand(0.85,0.95),null,0,true); }  // 메가 구멍 3개(채우면 거대화 → 침대 으깸)
   } else if(id===2){
     big(buildBigHouse); big(buildVilla);                   // 큰 주택·더 큰 빌라
     flat(buildTree,10,2,0.8,1.7); flat(buildBush,12,0,0.8,1.6); prop(buildFlower,22,0.8,1.9);
@@ -2658,7 +2660,7 @@ function clearWorld(){
   ballGroup.scale.setScalar(1);
 }
 // 맵별 제한시간(+30초): 맵1=90·맵2=120·맵3,4=150·맵5,6=180 / 이벤트=150
-function roundTimeFor(){ if(DUNG) return 150; if(MAP>0) return [0,120,150,160,180,210,210][MAP]; return 180; }
+function roundTimeFor(){ if(DUNG) return 150; if(MAP>0) return [0,140,150,160,180,210,210][MAP]; return 180; }
 function beginRound(mode){
   // 맵 모드(map1~6) → 롤 메커니즘 + 테마 레벨 / snow → 눈사람 만들기 이벤트
   let mapId=0; const mm=/^map([1-6])$/.exec(mode||'');
