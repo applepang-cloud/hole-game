@@ -176,6 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int? _fingerMap; // 스토리 리스트에서 손가락으로 가리킬 맵 번호
   List<StoryLine>? _dialogue; // 대사 컷씬(진행 중이면 non-null)
   VoidCallback? _dialogueDone; // 대사 끝난 뒤 콜백
+  int? _dlgBg; // 대사 배경 맵 번호(bgN.jpg)
   int _dlgKey = 0; // 컷씬마다 새 상태 보장용
 
   @override
@@ -244,7 +245,7 @@ class _HomeScreenState extends State<HomeScreen> {
               _screen = 'story';
               _fingerMap = (next <= kMaps.length && !_cleared.contains(next)) ? next : null;
             });
-          });
+          }, bg: num);
         } else {
           setState(() {
             _playing = false;
@@ -265,7 +266,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // 대사 컷씬 시작 (lines 비면 즉시 onDone)
-  void _startDialogue(List<StoryLine> lines, VoidCallback onDone) {
+  void _startDialogue(List<StoryLine> lines, VoidCallback onDone, {int? bg}) {
     if (lines.isEmpty) {
       onDone();
       return;
@@ -273,6 +274,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _dialogue = lines;
       _dialogueDone = onDone;
+      _dlgBg = bg;
       _dlgKey++;
     });
   }
@@ -310,7 +312,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _playing = true;
       });
       _holeShowGame('map$num'.toJS);
-    });
+    }, bg: num);
   }
 
   // 다시 하기(같은 맵/모드)
@@ -353,6 +355,7 @@ class _HomeScreenState extends State<HomeScreen> {
       content = _DialogueOverlay(
         key: ValueKey('dlg$_dlgKey'),
         lines: _dialogue!,
+        bg: _dlgBg,
         onDone: _endDialogue,
       );
     } else if (_result != null) {
@@ -1116,9 +1119,10 @@ class _EventSelect extends StatelessWidget {
 
 /// 스토리 컷씬 — 좌우 캐릭터 + 말풍선, 탭하여 진행
 class _DialogueOverlay extends StatefulWidget {
-  const _DialogueOverlay({super.key, required this.lines, required this.onDone});
+  const _DialogueOverlay({super.key, required this.lines, required this.onDone, this.bg});
   final List<StoryLine> lines;
   final VoidCallback onDone;
+  final int? bg; // 배경 맵 번호(bgN.jpg)
   @override
   State<_DialogueOverlay> createState() => _DialogueOverlayState();
 }
@@ -1142,8 +1146,28 @@ class _DialogueOverlayState extends State<_DialogueOverlay> {
       onTap: _next,
       child: Container(
         constraints: const BoxConstraints.expand(),
-        color: const Color(0xCC0A0D12),
-        child: SafeArea(
+        color: const Color(0xFF0A0D12),
+        child: Stack(children: [
+          // 맵별 배경 이미지 (bgN.jpg)
+          if (widget.bg != null)
+            Positioned.fill(
+              child: Image.asset('assets/backgrounds/bg${widget.bg}.jpg',
+                  fit: BoxFit.cover,
+                  errorBuilder: (ctx, e, s) => const SizedBox.expand()),
+            ),
+          // 배경 위 어둡게(가독성) — 약한 스크림
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                  colors: [Color(0x66000000), Color(0x22000000), Color(0x99000000)],
+                  stops: [0.0, 0.45, 1.0],
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
           child: Stack(children: [
             // 말풍선 (상단, 말하는 쪽 정렬)
             Positioned(
@@ -1154,11 +1178,11 @@ class _DialogueOverlayState extends State<_DialogueOverlay> {
               ),
             ),
             // 좌우 캐릭터 (하단)
-            Positioned(left: 18, bottom: 24, child: _char(line, true)),
-            Positioned(right: 18, bottom: 24, child: _char(line, false)),
+            Positioned(left: 14, bottom: 24, child: _char(line, true)),
+            Positioned(right: 14, bottom: 24, child: _char(line, false)),
             const Positioned(
               bottom: 6, left: 0, right: 0,
-              child: Center(child: Text('▶ 탭하여 계속', style: TextStyle(color: Colors.white70, fontSize: 12))),
+              child: Center(child: Text('▶ 탭하여 계속', style: TextStyle(color: Colors.white70, fontSize: 13))),
             ),
             // 스킵 — 대사 건너뛰고 바로 시작
             Positioned(
@@ -1179,6 +1203,7 @@ class _DialogueOverlayState extends State<_DialogueOverlay> {
             ),
           ]),
         ),
+        ]),
       ),
     );
   }
@@ -1196,12 +1221,21 @@ class _DialogueOverlayState extends State<_DialogueOverlay> {
       duration: const Duration(milliseconds: 180),
       scale: speaking ? 1.0 : 0.84,
       child: Opacity(
-        opacity: speaking ? 1.0 : 0.5,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: Image.asset('assets/portraits/${c.img}.png',
-              width: 132, height: 150, fit: BoxFit.cover,
-              errorBuilder: (ctx, e, s) => const SizedBox(width: 132, height: 150)),
+        opacity: speaking ? 1.0 : 0.55,
+        // 캐릭터 뒤 검은 반투명 패널 — 배경 위에서 캐릭터가 또렷하게
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: const Color(0xAA000000),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 16, spreadRadius: 2)],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Image.asset('assets/portraits/${c.img}.png',
+                width: 198, height: 225, fit: BoxFit.cover,
+                errorBuilder: (ctx, e, s) => const SizedBox(width: 198, height: 225)),
+          ),
         ),
       ),
     );
@@ -1209,20 +1243,20 @@ class _DialogueOverlayState extends State<_DialogueOverlay> {
 
   Widget _bubble(StoryLine line) {
     return Container(
-      constraints: const BoxConstraints(maxWidth: 320),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      constraints: const BoxConstraints(maxWidth: 360),
+      padding: const EdgeInsets.fromLTRB(22, 16, 22, 18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 12, offset: Offset(0, 4))],
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 16, offset: Offset(0, 5))],
       ),
       child: Column(
         crossAxisAlignment: line.left ? CrossAxisAlignment.start : CrossAxisAlignment.end,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(line.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFFE8552D))),
-          const SizedBox(height: 3),
-          Text(line.text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF2B2335))),
+          Text(line.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFFE8552D))),
+          const SizedBox(height: 5),
+          Text(line.text, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: Color(0xFF2B2335), height: 1.25)),
         ],
       ),
     );
