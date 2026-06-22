@@ -833,7 +833,7 @@ let atkWindow=true, atkPhaseT=3.2;   // 적 공격 페이즈(공격 구간 ↔ �
 const ATK_ON=3.2, ATK_OFF=2.6;
 function updateAtkPhase(dt){ atkPhaseT-=dt; if(atkPhaseT<=0){ atkWindow=!atkWindow; atkPhaseT=atkWindow?ATK_ON:ATK_OFF; } }
 let icePatches=[], iceHoles=[], projectiles=[], santa=null, santaT=0, snowVel={x:0,z:0};   // 남극 테마
-let snowSinks=[], snowThrowT=8, snowArrow=null;   // 싱크홀 / 15초 투척 타이머 / 받침 안내 화살표
+let snowSinks=[], snowThrowT=8, snowArrow=null, mapArrow=null;   // 싱크홀 / 15초 투척 타이머 / 안내 화살표(눈·맵)
 
 /* --- 몬스터/사람 빌더 (size=충돌 반지름) --- */
 function buildAnt(){ const g=new THREE.Group(); const c=0x2a1a10;
@@ -1007,9 +1007,10 @@ function mapSwallow(item){
   loose.splice(loose.indexOf(item),1);
   falling.push({ grp:item.grp, x0:item.x, z0:item.z, y0:(item.y||0.15)+0.1, t:0, dur:0.4,
     spin:rand(4,9), tilt:rand(3,7), toY:Math.max(0.3,ball.r*0.5) });
-  // 일반 물건 빨아들이기 → 아주 조금만 증가
-  ball.vol += Math.pow(item.size,3)*ABSORB*0.045; ball.score++;
+  // 빨아들이기 성장 — 눈 모드는 눈더미를 묻혀 크게 성장, 그 외 아주 조금
+  ball.vol += Math.pow(item.size,3)*ABSORB*(SNOW?0.5:0.045); ball.score++;
   refreshBlue(); SFX.pop(ball.score); updateHUD();
+  if(SNOW && ball.r>=snowTarget){} // (목표는 updateSnow의 받침 도달로 처리)
 }
 function updateSplats(dt){
   for(let i=splats.length-1;i>=0;i--){ const s=splats[i]; s.t+=dt; const t=Math.min(1,s.t/s.dur);
@@ -1103,7 +1104,7 @@ function updateSpawners(dt){
         spawnPuff(s.x,s.z); spawnPuff(s.x,s.z); scene.remove(s.grp); spawners.splice(i,1);
         // 구멍 크기별 성장: 작은 구멍은 아주 조금(현재의 ~25%), 큰 구멍은 좀 더(현재의 50%)
         const gmul = clamp(0.45 + (s.r-0.4)/0.5*0.3, 0.45, 0.75);   // 작은 구멍 적게·큰 구멍 더
-        ball.vol += (0.8 + s.r*s.r*s.r)*0.9*gmul; ball.score++; refreshActive(); SFX.loot(); updateHUD();
+        ball.vol += (0.8 + s.r*s.r*s.r)*1.08*gmul; ball.score++; refreshActive(); SFX.loot(); updateHUD();   // 구멍 흡수 성장 1.2배
         if(MAP>0 && spawners.length===0 && !ended) finish(true);   // 맵: 모든 구멍 제거 → 클리어(눈사람 모드는 제외)
         continue;
       }
@@ -1399,8 +1400,8 @@ function populateMap(id){
     for(let i=0;i<3;i++){ const p=Pc(4); addCurseZone(p[0],p[1],rand(2.5,3.8)); }
     addPortal(rand(-H*0.7,-H*0.3), rand(-H*0.5,H*0.5), rand(H*0.3,H*0.7), rand(-H*0.5,H*0.5));
   }
-  // 모든 맵 공통: 작은→큰 성장 사다리가 끊기지 않도록 중간 구멍 보장
-  for(let i=0;i<5;i++){ const p=Pc(2); addSpawner(p[0],p[1], rand(0.85,1.15), null, 0); }
+  // 모든 맵 공통: 작은→큰 성장 사다리 + 빠른 성장용 중간 구멍(증량)
+  for(let i=0;i<10;i++){ const p=Pc(2); addSpawner(p[0],p[1], rand(0.8,1.2), null, 0); }
 }
 /* --- 체력 데미지 --- */
 function damage(amt, x, z){
@@ -1526,6 +1527,7 @@ function updateMapExtras(dt){
   updateAtkPhase(dt);
   updateMonsters(dt);
   if(spawners.length) updateSpawners(dt);
+  updateMapArrow();
   updateChopper(dt); updateBombs(dt);
   updateDevices(dt);
   if(hurtT>0) hurtT=Math.max(0,hurtT-dt);
@@ -1666,6 +1668,17 @@ function buildSnowArrow(){ const g=new THREE.Group();
   const shaft=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.22,0.9),m); shaft.position.z=0.1; g.add(shaft);
   const head=new THREE.Mesh(new THREE.ConeGeometry(0.42,0.7,4),m); head.rotation.x=Math.PI/2; head.position.z=0.85; g.add(head);
   g.userData.bob=0; return g; }
+// 맵 모드: 흡수(메우기) 가능한 가장 가까운 구멍 방향을 화살표로 안내
+function updateMapArrow(){
+  let best=null, bd=1e9;
+  for(const s of spawners){ if(ball.r >= s.r*0.8){ const d=Math.hypot(s.x-ball.x,s.z-ball.z); if(d>0.1 && d<bd){ bd=d; best=s; } } }
+  if(best){
+    if(!mapArrow){ mapArrow=buildSnowArrow(); scene.add(mapArrow); }
+    mapArrow.userData.bob+=0.12;
+    mapArrow.position.set(ball.x, ball.r+1.4+Math.sin(mapArrow.userData.bob)*0.16, ball.z);
+    mapArrow.rotation.y=Math.atan2(best.x-ball.x, best.z-ball.z);
+  } else if(mapArrow){ scene.remove(mapArrow); mapArrow=null; }
+}
 // 15초마다 — 가까운 원거리 적 최대 2마리가 동시에 눈 던지기
 function snowVolley(){
   const cand=[];
@@ -1697,7 +1710,9 @@ function buildSnowWorld(){
 }
 function populateSnow(){
   const H=20;
-  for(let i=0;i<40;i++) addProp(buildSnowPile(), rand(-H,H), rand(-H,H), rand(0.7,2.4));   // 다양한 크기 눈더미
+  // 쌓인 눈언덕 — 많이 + 작은 것부터(작은 볼이 묻혀도 커지게). 굴리면 흡수돼 성장
+  for(let i=0;i<40;i++){ const a=Math.random()*6.28,d=0.8+Math.random()*9; addProp(buildSnowPile(), Math.cos(a)*d, Math.sin(a)*d, rand(0.2,0.5)); }  // 초반용 작은 눈더미
+  for(let i=0;i<70;i++) addProp(buildSnowPile(), rand(-H,H), rand(-H,H), rand(0.5,2.6));   // 다양한 크기 눈언덕(많이)
   for(let i=0;i<6;i++)  addProp(buildSnowCritter(), rand(-H,H), rand(-H,H), rand(0.9,1.5)); // 흩어진 눈 인간
   for(let i=0;i<6;i++)  addIcePatch(rand(-H,H), rand(-H*0.8,H), rand(2.5,4.5));              // 미끄러운 빙판길(불규칙)
   for(let i=0;i<6;i++)  addIceHole(rand(-H,H), rand(-H,H), rand(0.6,1.2), rand(3,6));        // 얼음 구멍(펭귄 스폰)
@@ -1828,7 +1843,7 @@ function updateAssemble(dt){
 }
 
 /* ===================== 쇠똥구리(소똥 굴리기) 이벤트 ===================== */
-let sprouts=[], dungScape=null, dungWin=null;   // 새싹 캐릭터 / 마을·도시 풍경 / 클리어 연출
+let sprouts=[], dungScape=null, dungWin=null, dungPiles=[];   // 새싹 / 풍경 / 연출 / 바닥 똥(흡수·충돌)
 function buildDungPile(){ const g=new THREE.Group();   // 소똥 덩어리
   const n=2+((Math.random()*2)|0);
   for(let i=0;i<n;i++){ const r=rand(0.18,0.34); const lump=new THREE.Mesh(new THREE.IcosahedronGeometry(r,1),SMAT(0x6b4a2a,8,0x201509));
@@ -1870,31 +1885,40 @@ function buildDungWorld(variant){
     const mt2=buildBigMountain(); mt2.position.set(30,0,-28); mt2.scale.setScalar(0.7); dungScape.add(mt2);
   }
 }
+function spawnDungPile(x,z,sc){ const g=buildDungPile(); g.scale.setScalar(sc); g.position.set(x,0,z); g.rotation.y=Math.random()*6.28; scene.add(g);
+  dungPiles.push({ grp:g, x, z, size:0.46*sc }); }
 function populateDung(variant){
   const R=(MAP_BOUND||26)-2;
-  const P=()=>{ const a=Math.random()*6.28, d=1.0+Math.random()*R; return [Math.cos(a)*d, Math.sin(a)*d]; };
-  // 초반용 아주 작은 소똥(작은 시작 볼이 바로 주워 성장) — 중앙 밀집
-  for(let i=0;i<60;i++){ const a=Math.random()*6.28, d=0.8+Math.random()*8; addProp(buildDungPile(), Math.cos(a)*d, Math.sin(a)*d, rand(0.22,0.4)); }
-  // 소똥 덩어리 — 주 수집물(많이·크기 다양)
-  for(let i=0;i<160;i++){ const p=P(); addProp(buildDungPile(), p[0], p[1], rand(0.4,1.8)); }
-  if(variant===2){
-    // 도시: 빌딩·차·우편함·가로등·신문가판대
-    for(let i=0;i<26;i++){ const p=P(); addFlat(buildBuilding(), p[0], p[1], rand(0.6,1.4)); }
-    for(let i=0;i<22;i++){ const p=P(); addFlat(buildCar(), p[0], p[1], rand(0.7,1.3)); }
-    for(let i=0;i<8;i++){ const p=P(); addFlat(buildBus(), p[0], p[1], rand(0.7,1.1)); }
-    for(let i=0;i<16;i++){ const p=P(); addFlat(buildLamp(), p[0], p[1], rand(0.8,1.3)); }
-    for(let i=0;i<12;i++){ const p=P(); addFlat(buildMailbox(), p[0], p[1], rand(0.8,1.3)); }
-    for(let i=0;i<60;i++){ const p=P(); addProp(SMALL_MAKERS[(Math.random()*SMALL_MAKERS.length)|0](), p[0], p[1], rand(0.7,1.6)); }
-  } else {
-    // 마을: 버섯·풀·나무·꽃·덤불
-    for(let i=0;i<40;i++){ const p=P(); addProp(buildMushroom(), p[0], p[1], rand(0.7,2.0)); }
-    for(let i=0;i<50;i++){ const p=P(); addProp(buildGrassTuft(), p[0], p[1], rand(0.7,1.8)); }
-    for(let i=0;i<40;i++){ const p=P(); addProp(buildFlower(), p[0], p[1], rand(0.8,1.8)); }
-    for(let i=0;i<22;i++){ const p=P(); addFlat(buildTree(), p[0], p[1], rand(0.7,1.5)); }
-    for(let i=0;i<24;i++){ const p=P(); addFlat(buildBush(), p[0], p[1], rand(0.8,1.4)); }
-  }
+  const Pm=(min)=>{ const a=Math.random()*6.28, d=min+Math.random()*Math.max(2,R-min); return [Math.cos(a)*d, Math.sin(a)*d]; };
+  // 바닥 똥 — 아주 많이, 크기 다양. 작은 똥은 흡수해 성장 / 나보다 큰 똥에 부딪히면 게임오버
+  // 중앙(시작 지점)은 작은 똥만 — 즉사 방지
+  for(let i=0;i<90;i++){ const a=Math.random()*6.28, d=0.7+Math.random()*8; spawnDungPile(Math.cos(a)*d, Math.sin(a)*d, rand(0.16,0.45)); }   // 소형(중앙~중간)
+  for(let i=0;i<100;i++){ const p=Pm(8);  spawnDungPile(p[0], p[1], rand(0.5,1.4)); }   // 중형(바깥)
+  for(let i=0;i<40;i++){ const p=Pm(12); spawnDungPile(p[0], p[1], rand(1.6,3.4)); }     // 대형(가장자리 — 작을 땐 피해야)
+  // 배경 장식(비충돌)
+  if(variant===2){ for(let i=0;i<12;i++){ const p=Pm(10); const b=buildBuilding(); b.scale.setScalar(rand(1.4,2.6)); b.position.set(p[0],0,p[1]); dungScape.add(b); } }
+  else { for(let i=0;i<14;i++){ const p=Pm(10); const t=buildTree(); t.scale.setScalar(rand(1.2,2.4)); t.position.set(p[0],0,p[1]); dungScape.add(t); }
+         for(let i=0;i<16;i++){ const p=Pm(8); const m=buildMushroom(); m.scale.setScalar(rand(1.2,2.6)); m.position.set(p[0],0,p[1]); dungScape.add(m); } }
   // 도망다니는 새싹 캐릭터
-  for(let i=0;i<14;i++){ const p=P(); spawnSprout(p[0], p[1]); }
+  for(let i=0;i<12;i++){ const p=Pm(6); spawnSprout(p[0], p[1]); }
+}
+// 똥 볼: 작은 똥 흡수(성장) / 더 큰 똥 충돌 시 게임오버
+function updateDung(dt){
+  if(dungWin){ updateDungCrush(dt); return; }
+  const r=ball.r;
+  for(let i=dungPiles.length-1;i>=0;i--){ const p=dungPiles[i];
+    const d=Math.hypot(p.x-ball.x, p.z-ball.z);
+    if(d < r + p.size){
+      if(r >= p.size*0.9){   // 나보다 작은 똥 → 흡수
+        dungPiles.splice(i,1);
+        falling.push({ grp:p.grp, x0:p.x, z0:p.z, y0:0.2, t:0, dur:0.4, spin:rand(4,9), tilt:rand(3,7), toY:Math.max(0.3,r*0.5) });
+        ball.vol += Math.pow(p.size,3)*ABSORB*0.5; ball.score++; refreshBall(); SFX.pop(ball.score); updateHUD();
+        if(ball.r>=goalR() && !ended && !dungWin) dungWin={t:0};   // 충분히 거대 → 산/도시 흡수 연출
+      } else if(d < r + p.size*0.5 && !ended){   // 더 큰 똥 중심에 충돌 → 게임오버
+        finish(false, '나보다 큰 똥에 부딪혔다! 💩'); return;
+      }
+    }
+  }
 }
 function updateDungCrush(dt){   // 산/도시를 굴려 뭉개는 클리어 연출
   moveVec={x:0,y:0};
@@ -2402,8 +2426,8 @@ window.__HOLE = {
   get flats(){ return loose.filter(function(o){return o.kind==='flat';}).length; },
   get ballR(){ return ball.r; }, get score(){ return ball.score; }, get running(){ return running; },
   kinds(){ var k={}; monsters.forEach(function(m){k[m.kind]=(k[m.kind]||0)+1;}); return k; },
-  step(dt){ dt=dt||0.05; if(running&&!ended){ if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0){ updateMapExtras(dt); updateFalling(dt); } else if(SNOW){ updateSnow(dt); updateFalling(dt); } else if(DUNG){ updateSprouts(dt); updateFalling(dt); } } } updateSplats(dt); },
-  get dung(){ return DUNG; }, get sprouts(){ return sprouts.length; }, get goalR(){ return goalR(); },
+  step(dt){ dt=dt||0.05; if(running&&!ended){ if(MODE==='roll'){ updateBall(dt); if(!DUNG) updateAbsorb(dt); if(MAP>0){ updateMapExtras(dt); updateFalling(dt); } else if(SNOW){ updateSnow(dt); updateFalling(dt); } else if(DUNG){ updateDung(dt); updateSprouts(dt); updateFalling(dt); } } } updateSplats(dt); },
+  get dung(){ return DUNG; }, get sprouts(){ return sprouts.length; }, get goalR(){ return goalR(); }, get dungPiles(){ return dungPiles.length; },
   get snow(){ return SNOW; }, get snowMovers(){ return snowMovers.length; }, get assembling(){ return !!snowAssemble; },
   get snowSinks(){ return snowSinks.length; }, get snowArrow(){ return !!snowArrow; }, get snowBuilt(){ return !!(snowAssemble&&snowAssemble.built); },
   get projectiles(){ return projectiles.length; },
@@ -2490,7 +2514,7 @@ function loop(now){
     countdown=Math.max(0,countdown-dt);
     updateCamera(dt); updateCountdownUI();
   } else if(running && !ended){
-    if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0){ updateMapExtras(dt); updateFalling(dt); } else if(SNOW){ updateSnow(dt); updateFalling(dt); } else if(DUNG){ updateSprouts(dt); updateFalling(dt); } }
+    if(MODE==='roll'){ updateBall(dt); if(!DUNG) updateAbsorb(dt); if(MAP>0){ updateMapExtras(dt); updateFalling(dt); } else if(SNOW){ updateSnow(dt); updateFalling(dt); } else if(DUNG){ updateDung(dt); updateSprouts(dt); updateFalling(dt); } }
     else if(MODE==='hole'){ updateHole(dt); updateAbsorbHole(dt); updateFalling(dt); }
     else { updateRoom(dt); updateFalling(dt); }
     updateCamera(dt);
@@ -2549,16 +2573,18 @@ function clearWorld(){
   for(const p of projectiles) scene.remove(p.grp); projectiles=[];
   if(santa){ scene.remove(santa); santa=null; } icePatches=[]; snowVel={x:0,z:0};
   for(const s of sprouts) scene.remove(s.grp); sprouts=[];
+  for(const p of dungPiles) scene.remove(p.grp); dungPiles=[];
   if(dungScape){ scene.remove(dungScape); dungScape=null; } dungWin=null;
   placed=[];
   for(const s of snowSinks) scene.remove(s.grp); snowSinks=[];
   if(snowArrow){ scene.remove(snowArrow); snowArrow=null; } snowThrowT=8;
+  if(mapArrow){ scene.remove(mapArrow); mapArrow=null; }
   roomSink=null; roomTotal=0; ballSink=null;
   blueBall.scale.setScalar(1); blueBall.quaternion.identity();
   ballGroup.scale.setScalar(1);
 }
 // 맵별 제한시간(+30초): 맵1=90·맵2=120·맵3,4=150·맵5,6=180 / 이벤트=150
-function roundTimeFor(){ if(DUNG) return 120; if(MAP>0) return [0,90,120,150,150,180,180][MAP]; return 150; }
+function roundTimeFor(){ if(DUNG) return 150; if(MAP>0) return [0,120,150,180,180,210,210][MAP]; return 180; }
 function beginRound(mode){
   // 맵 모드(map1~6) → 롤 메커니즘 + 테마 레벨 / snow → 눈사람 만들기 이벤트
   let mapId=0; const mm=/^map([1-6])$/.exec(mode||'');
@@ -2567,7 +2593,7 @@ function beginRound(mode){
   DUNG = 0; if(mode==='dung'){ DUNG=1; mode='roll'; } else if(mode==='dungcity'){ DUNG=2; mode='roll'; }
   MAP = mapId; MODE = mode;
   clearWorld();
-  ball = { x:0, z:0, r:START_R, vol:0, area:Math.PI*START_R*START_R, heading:0, score:0, hp:300, hpMax:300 };
+  ball = { x:0, z:0, r:START_R, vol:0, area:Math.PI*START_R*START_R, heading:0, score:0, hp:350, hpMax:350 };
   camYaw = 0; countdown = 3.0; _cdShown = -1;   // 시작 3-2-1 카운트다운
   ballGroup.quaternion.identity();
   MAP_BOUND = (MAP>0) ? MAPS[MAP].bound-1 : GROUND-2;
@@ -2609,7 +2635,8 @@ function beginRound(mode){
   const outdoor = (mode!=='room');
   outdoorGroup.visible = outdoor; skyDome.visible = outdoor; roomGroup.visible = !outdoor;
   if(mode==='roll'){
-    core.material.color.setHex(DUNG?0x5e4023:0x9a8350);   // 쇠똥구리: 진한 똥 갈색
+    core.material.color.setHex(DUNG?0x7a5a24:0x9a8350);   // 쇠똥구리: 황금빛 갈색 똥
+    core.material.emissive.setHex(DUNG?0x4a3608:0x000000); core.material.emissiveIntensity=DUNG?0.55:0;
     if(!DUNG){ for(let i=0;i<5;i++){ const star=new THREE.Mesh(new THREE.TetrahedronGeometry(0.32), MAT(0xffe066));
       const d=new THREE.Vector3(rand(-1,1),rand(-1,1),rand(-1,1)).normalize();
       star.position.copy(d); ballGroup.add(star); stuck.push({grp:star,dir:d}); } }
