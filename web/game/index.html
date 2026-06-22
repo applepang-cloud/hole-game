@@ -799,6 +799,7 @@ let monsters=[], splats=[], spawners=[];
 let chopper=null, chopperT=0, attackTimer=0, bombs=[], hurtT=0;
 const MONSTER_CAP=34, FLATTEN_RATIO=0.8, AIR_ATTACK_EVERY=30;   // 공중 공격 주기(초)
 let SNOW=false, snowBase=null, snowMovers=[], snowTarget=1.2, snowAssemble=null;   // 눈사람 만들기 이벤트
+let icePatches=[], iceHoles=[], projectiles=[], santa=null, santaT=0, snowVel={x:0,z:0};   // 남극 테마
 
 /* --- 몬스터/사람 빌더 (size=충돌 반지름) --- */
 function buildAnt(){ const g=new THREE.Group(); const c=0x3a2418;
@@ -1286,57 +1287,166 @@ function buildSnowBaseBody(){ const g=new THREE.Group(); const r=1.4;
   ring.rotation.x=-Math.PI/2; ring.position.y=0.05; g.add(ring); g.userData.ring=ring;
   addShadow(g,r); return g; }
 
-function addSnowMover(x,z){
-  const g=buildSnowCritter(); g.position.set(x,0,z); scene.add(g);
-  snowMovers.push({ grp:g, x, z, size:g.userData.size, dir:Math.random()*6.28, speed:rand(1.0,2.0), bob:Math.random()*6.28 });
+/* --- 남극 적: 펭귄(원거리)·남극곰(근접)·선원(원거리) --- */
+function buildPenguin(){ const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.24,9,8),MAT(0x2b2f38)); body.position.y=0.26; body.scale.set(1,1.25,0.9); g.add(body);
+  const belly=new THREE.Mesh(new THREE.SphereGeometry(0.17,9,8),MAT(0xffffff)); belly.position.set(0,0.24,0.12); belly.scale.set(0.9,1.15,0.7); g.add(belly);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.15,9,7),MAT(0x2b2f38)); head.position.y=0.56; g.add(head);
+  const beak=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.14,5),MAT(0xff9a18)); beak.position.set(0,0.55,0.16); beak.rotation.x=Math.PI/2; g.add(beak);
+  for(const sx of[-1,1]){ const ft=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.04,0.16),MAT(0xff9a18)); ft.position.set(sx*0.08,0.02,0.05); g.add(ft); }
+  addShadow(g,0.26); return tag(g,0.36,0); }
+function buildPolarBear(){ const g=new THREE.Group(); const c=0xf2f6fb;
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.55,10,8),MAT(c)); body.position.set(0,0.55,0); body.scale.set(1,0.85,1.5); g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.32,9,7),MAT(c)); head.position.set(0,0.7,0.62); g.add(head);
+  const snout=new THREE.Mesh(new THREE.SphereGeometry(0.16,8,6),MAT(0xe6edf5)); snout.position.set(0,0.62,0.86); g.add(snout);
+  const nose=new THREE.Mesh(new THREE.SphereGeometry(0.06,6,5),MAT(0x222630)); nose.position.set(0,0.66,1.0); g.add(nose);
+  for(const sx of[-1,1]){ const ear=new THREE.Mesh(new THREE.SphereGeometry(0.1,7,6),MAT(c)); ear.position.set(sx*0.18,0.96,0.6); g.add(ear); }
+  for(const sx of[-1,1]) for(const sz of[-0.45,0.45]){ const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.14,0.4,7),MAT(c)); leg.position.set(sx*0.32,0.2,sz); g.add(leg); }
+  addShadow(g,0.7); return tag(g,0.95,0); }
+function buildSailor(){ const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.21,0.5,8),MAT(0x2a5a9c)); body.position.y=0.55; g.add(body);
+  const stripe=new THREE.Mesh(new THREE.CylinderGeometry(0.175,0.215,0.1,8),MAT(0xffffff)); stripe.position.y=0.6; g.add(stripe);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.16,9,7),MAT(0xf3c9a0)); head.position.y=0.95; g.add(head);
+  const cap=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.17,0.1,10),MAT(0xffffff)); cap.position.y=1.08; g.add(cap);
+  for(const sx of[-1,1]){ const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.36,6),MAT(0x33405a)); leg.position.set(sx*0.08,0.2,0); g.add(leg); }
+  addShadow(g,0.26); return tag(g,0.44,0); }
+function buildSantaSleigh(){ const g=new THREE.Group();
+  for(let i=0;i<2;i++){ const dr=new THREE.Group();
+    const body=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,1.0),MAT(0x9a5a2e)); body.position.y=0.7; dr.add(body);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(0.22,8,6),MAT(0x9a5a2e)); head.position.set(0,1.0,0.6); dr.add(head);
+    const nose=new THREE.Mesh(new THREE.SphereGeometry(0.08,7,6),new THREE.MeshBasicMaterial({color:0xff3030})); nose.position.set(0,1.0,0.82); dr.add(nose);
+    for(const sx of[-1,1]){ const horn=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.3,4),MAT(0x6b4a2a)); horn.position.set(sx*0.12,1.25,0.55); dr.add(horn); }
+    dr.position.set(0,0,2.0-i*1.3); g.add(dr); }
+  const sled=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.5,1.2),MAT(0xc0392b)); sled.position.set(0,0.7,-0.8); g.add(sled);
+  const runner=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.08,1.6),MAT(0xf4c430)); runner.position.set(0,0.4,-0.8); g.add(runner);
+  const sBody=new THREE.Mesh(new THREE.SphereGeometry(0.3,9,8),MAT(0xc0392b)); sBody.position.set(0,1.05,-0.8); g.add(sBody);
+  const sHead=new THREE.Mesh(new THREE.SphereGeometry(0.16,9,7),MAT(0xf3c9a0)); sHead.position.set(0,1.4,-0.8); g.add(sHead);
+  const beard=new THREE.Mesh(new THREE.SphereGeometry(0.14,8,6),MAT(0xffffff)); beard.position.set(0,1.32,-0.68); beard.scale.set(1,0.8,0.7); g.add(beard);
+  const hat=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.3,8),MAT(0xc0392b)); hat.position.set(0,1.62,-0.82); g.add(hat);
+  return g; }
+function buildShip(){ const g=new THREE.Group();
+  const hull=new THREE.Mesh(new THREE.BoxGeometry(3.0,1.4,8.0),MAT(0x8a2f2c)); hull.position.y=0.7; g.add(hull);
+  const hull2=new THREE.Mesh(new THREE.BoxGeometry(3.2,0.8,8.2),MAT(0xeeeeee)); hull2.position.y=1.5; g.add(hull2);
+  const deck=new THREE.Mesh(new THREE.BoxGeometry(2.6,0.2,7.4),MAT(0xc9a06a)); deck.position.y=1.95; g.add(deck);
+  const cabin=new THREE.Mesh(new THREE.BoxGeometry(2.0,1.4,2.4),MAT(0xf2f2f2)); cabin.position.set(0,2.6,-1.5); g.add(cabin);
+  const mast=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,5,8),MAT(0x6b4a2a)); mast.position.set(0,5,1.5); g.add(mast);
+  const sail=new THREE.Mesh(new THREE.PlaneGeometry(2.4,3),new THREE.MeshPhongMaterial({color:0xffffff,side:THREE.DoubleSide})); sail.position.set(0,5,1.5); g.add(sail);
+  const funnel=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.4,1.6,12),MAT(0xc0392b)); funnel.position.set(0,3.7,-1.5); g.add(funnel);
+  return g; }
+function buildSnowProjectile(){ return new THREE.Mesh(new THREE.SphereGeometry(0.16,7,6),new THREE.MeshPhongMaterial({color:0xffffff,flatShading:true})); }
+function buildIceHole(r){ const g=new THREE.Group();
+  const rim=new THREE.Mesh(new THREE.RingGeometry(0.85,1.08,28),new THREE.MeshBasicMaterial({color:0x9fd6ef})); rim.rotation.x=-Math.PI/2; rim.position.y=0.03; g.add(rim);
+  const water=new THREE.Mesh(new THREE.CircleGeometry(1,28),new THREE.MeshPhongMaterial({color:0x2a6aa0,shininess:60,specular:0xbfe6ff})); water.rotation.x=-Math.PI/2; water.position.y=0.04; g.add(water);
+  g.scale.setScalar(r); return g; }
+
+const SNOW_BUILD={ penguin:buildPenguin, bear:buildPolarBear, sailor:buildSailor };
+function spawnSnowEnemy(kind,x,z,fromHole){
+  if(snowMovers.length>=MONSTER_CAP) return;
+  const g=(SNOW_BUILD[kind]||buildPenguin)(); const size=g.userData.size;
+  g.position.set(x, fromHole?-size*1.8:0, z); g.rotation.y=Math.random()*6.28; scene.add(g);
+  snowMovers.push({ grp:g, x, z, size, kind, dir:Math.random()*6.28, speed:rand(1.0,2.2), bob:Math.random()*6.28,
+    climb:fromHole?1:0, meleeCd:rand(0.5,1.5), throwCd:rand(2,5), ranged:(kind==='penguin'||kind==='sailor') });
 }
+function snowEnemyDmg(kind){ return kind==='bear'?14 : kind==='sailor'?7 : 5; }
+function throwSnow(m){
+  const proj=buildSnowProjectile(); proj.position.set(m.x,0.6,m.z); scene.add(proj);
+  projectiles.push({ grp:proj, x0:m.x, z0:m.z, tx:ball.x, tz:ball.z, t:0, dur:Math.max(0.5,Math.min(1.4,Math.hypot(ball.x-m.x,ball.z-m.z)/9)) });
+}
+function updateProjectiles(dt){
+  for(let i=projectiles.length-1;i>=0;i--){ const p=projectiles[i]; p.t+=dt; const t=Math.min(1,p.t/p.dur);
+    p.grp.position.set(p.x0+(p.tx-p.x0)*t, 0.6+Math.sin(t*Math.PI)*1.6, p.z0+(p.tz-p.z0)*t); p.grp.rotation.x+=dt*8;
+    if(t>=1){ if(Math.hypot(ball.x-p.tx,ball.z-p.tz)<ball.r+0.8) damage(rand(4,8)|0, p.tx,p.tz); spawnPuff(p.tx,p.tz); scene.remove(p.grp); projectiles.splice(i,1); }
+  }
+}
+function addIceHole(x,z,r,interval){ const g=buildIceHole(r); g.position.set(x,0,z); scene.add(g);
+  iceHoles.push({ grp:g, x, z, r, t:Math.random()*interval, interval }); }
+function addIcePatch(x,z,r){ const m=new THREE.Mesh(new THREE.CircleGeometry(r,24),new THREE.MeshPhongMaterial({color:0xbfe6f5,transparent:true,opacity:0.7,shininess:90,specular:0xffffff}));
+  m.rotation.x=-Math.PI/2; m.position.set(x,0.02,z); mapGroup.add(m); icePatches.push({x,z,r}); }
+function updateSanta(dt){ if(!santa) return; santaT+=dt*0.45; const R=MAP_BOUND+8;
+  santa.position.set(Math.cos(santaT)*R, 11+Math.sin(santaT*1.3)*1.2, Math.sin(santaT)*R); santa.rotation.y=-santaT+Math.PI/2; }
+
 function buildSnowWorld(){
-  if(mapGroup) scene.remove(mapGroup);
-  mapGroup=new THREE.Group(); scene.add(mapGroup); windowGhost=null;
+  if(mapGroup) scene.remove(mapGroup); mapGroup=new THREE.Group(); scene.add(mapGroup); windowGhost=null;
   const H=22;
-  mapGroup.add(new THREE.Mesh(new THREE.SphereGeometry(H+60,18,12),new THREE.MeshBasicMaterial({color:0xcfe8ff,side:THREE.BackSide,fog:false})));
-  const ground=new THREE.Mesh(new THREE.CircleGeometry(H+30,44),new THREE.MeshPhongMaterial({color:0xeef5ff,shininess:12,specular:0x22384a})); ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; mapGroup.add(ground);
+  mapGroup.add(new THREE.Mesh(new THREE.SphereGeometry(H+60,18,12),new THREE.MeshBasicMaterial({color:0x0a1430,side:THREE.BackSide,fog:false})));
+  // 오로라
+  const auroraCols=[0x49f5b0,0x4fd0f5,0x9a7af5,0x6af59a];
+  for(let i=0;i<4;i++){ const a=new THREE.Mesh(new THREE.PlaneGeometry(70,16),
+      new THREE.MeshBasicMaterial({color:auroraCols[i],transparent:true,opacity:0.22,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));
+    a.position.set(rand(-18,18),34+i*3,-H-26); a.rotation.set(-0.5,rand(-0.3,0.3),rand(-0.2,0.2)); mapGroup.add(a); }
+  for(let i=0;i<40;i++){ const s=new THREE.Mesh(new THREE.SphereGeometry(0.3,4,4),new THREE.MeshBasicMaterial({color:0xffffff,fog:false}));
+    const a=Math.random()*6.28; s.position.set(Math.cos(a)*rand(40,70),rand(22,50),Math.sin(a)*rand(40,70)-10); mapGroup.add(s); }
+  const ground=new THREE.Mesh(new THREE.CircleGeometry(H+30,44),new THREE.MeshPhongMaterial({color:0xeaf2fb,shininess:14,specular:0x33506a})); ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; mapGroup.add(ground);
+  // 얼음 바다 + 정박한 배
+  const sea=new THREE.Mesh(new THREE.PlaneGeometry(90,34),new THREE.MeshPhongMaterial({color:0x1c4e7a,shininess:80,specular:0xbfe6ff})); sea.rotation.x=-Math.PI/2; sea.position.set(0,0.006,-H-15); mapGroup.add(sea);
+  const ship=buildShip(); ship.position.set(rand(-5,5),0.3,-H-9); ship.rotation.y=rand(-0.35,0.35); mapGroup.add(ship);
   for(let i=0;i<6;i++){ const a=i/6*Math.PI*2; const hill=new THREE.Mesh(new THREE.SphereGeometry(rand(6,11),10,8),MAT(0xe6f0fb)); hill.position.set(Math.cos(a)*(H+16),-rand(3,7),Math.sin(a)*(H+16)); mapGroup.add(hill); }
-  for(let i=0;i<10;i++){ const t=buildSnowPine(); const a=Math.random()*6.28, d=rand(H*0.55,H-2); t.position.set(Math.cos(a)*d,0,Math.sin(a)*d); t.scale.setScalar(rand(0.8,1.6)); mapGroup.add(t); }
+  for(let i=0;i<9;i++){ const a=Math.random()*6.28,d=rand(H*0.6,H-2); if(Math.sin(a)*d<-H*0.5) continue; const t=buildSnowPine(); t.position.set(Math.cos(a)*d,0,Math.sin(a)*d); t.scale.setScalar(rand(0.8,1.5)); mapGroup.add(t); }
+  santa=buildSantaSleigh(); scene.add(santa); santaT=Math.random()*6.28;
 }
 function populateSnow(){
   const H=20;
-  for(let i=0;i<46;i++) addProp(buildSnowPile(), rand(-H,H), rand(-H,H), rand(0.7,2.4));   // 다양한 크기 눈더미
-  for(let i=0;i<8;i++)  addProp(buildSnowCritter(), rand(-H,H), rand(-H,H), rand(0.9,1.6)); // 흩어진 눈 인간/몬스터
-  for(let i=0;i<6;i++)  addSnowMover(rand(-H,H), rand(-H,H));                                 // 움직이는 눈 몬스터
-  const bx=rand(-H*0.4,H*0.4), bz=H*0.62;
+  for(let i=0;i<40;i++) addProp(buildSnowPile(), rand(-H,H), rand(-H,H), rand(0.7,2.4));   // 다양한 크기 눈더미
+  for(let i=0;i<6;i++)  addProp(buildSnowCritter(), rand(-H,H), rand(-H,H), rand(0.9,1.5)); // 흩어진 눈 인간
+  for(let i=0;i<6;i++)  addIcePatch(rand(-H,H), rand(-H*0.8,H), rand(2.5,4.5));              // 미끄러운 빙판길
+  for(let i=0;i<5;i++)  addIceHole(rand(-H,H), rand(-H,H), rand(0.6,1.4), rand(3,6));        // 다양한 크기 얼음 구멍(펭귄 스폰)
+  for(let i=0;i<4;i++)  spawnSnowEnemy('penguin', rand(-H,H), rand(-H,H), false);
+  for(let i=0;i<2;i++)  spawnSnowEnemy('bear', rand(-H,H), rand(-H,H), false);               // 남극곰
+  for(let i=0;i<4;i++)  spawnSnowEnemy('sailor', rand(-8,8), -H+rand(0,5), false);           // 배 근처 선원
+  const bx=rand(-H*0.4,H*0.4), bz=H*0.55;
   snowBase=buildSnowBaseBody(); snowBase.position.set(bx,0,bz); scene.add(snowBase);
   snowBase.userData.x=bx; snowBase.userData.z=bz; snowBase.userData.r=1.4;
   snowTarget=1.2;
 }
+// 빙판길 미끄럼: 속도(관성) 기반 이동
+function updateBallSnow(dt){
+  if(snowAssemble) return;
+  const inp=inputVector(); let ddx=0,ddz=0;
+  if(inp.m>0.01){ const Fx=Math.sin(camYaw),Fz=Math.cos(camYaw),Rx=Math.cos(camYaw),Rz=-Math.sin(camYaw);
+    let ux=Fx*(-inp.y)-Rx*inp.x, uz=Fz*(-inp.y)-Rz*inp.x; const um=Math.hypot(ux,uz)||1; ddx=ux/um; ddz=uz/um; }
+  let onIce=false; for(const p of icePatches){ if(Math.hypot(ball.x-p.x,ball.z-p.z)<p.r){ onIce=true; break; } }
+  const maxSpd=6.0+ball.r*1.4, accel=(onIce?1.3:6.5)*maxSpd, f=Math.pow(onIce?0.99:0.8, dt*60);
+  snowVel.x+=ddx*inp.m*accel*dt; snowVel.z+=ddz*inp.m*accel*dt;
+  snowVel.x*=f; snowVel.z*=f;
+  const sp=Math.hypot(snowVel.x,snowVel.z); if(sp>maxSpd){ snowVel.x*=maxSpd/sp; snowVel.z*=maxSpd/sp; }
+  ball.x+=snowVel.x*dt; ball.z+=snowVel.z*dt;
+  const dist=Math.hypot(snowVel.x,snowVel.z)*dt;
+  if(dist>1e-4){ ball.heading=Math.atan2(snowVel.x,snowVel.z); const axis=_v.set(snowVel.z,0,-snowVel.x).normalize(); _q.setFromAxisAngle(axis,dist/ball.r); blueBall.quaternion.premultiply(_q); }
+  const lim=MAP_BOUND; ball.x=clamp(ball.x,-lim,lim); ball.z=clamp(ball.z,-lim,lim);
+  blueBall.position.set(ball.x, ball.r, ball.z);
+}
 function updateSnow(dt){
   const bound=MAP_BOUND-0.5;
-  // 움직이는 눈 몬스터(잡으면 흡수해 성장)
   for(let i=snowMovers.length-1;i>=0;i--){ const m=snowMovers[i];
-    m.dir += (Math.random()-0.5)*1.2*dt;
-    let nx=m.x+Math.sin(m.dir)*m.speed*dt, nz=m.z+Math.cos(m.dir)*m.speed*dt;
+    if(m.climb>0) m.climb=Math.max(0,m.climb-dt/0.6);
+    if(m.meleeCd>0) m.meleeCd-=dt; if(m.throwCd>0) m.throwCd-=dt;
+    const toB=Math.hypot(ball.x-m.x,ball.z-m.z);
+    if(toB<10 && m.climb<=0) m.dir=Math.atan2(ball.x-m.x,ball.z-m.z)+(Math.random()-0.5)*0.5;
+    else m.dir+=(Math.random()-0.5)*1.2*dt;
+    const spd=m.speed*(toB<10?1.2:1);
+    let nx=m.x+Math.sin(m.dir)*spd*dt, nz=m.z+Math.cos(m.dir)*spd*dt;
     if(nx<-bound||nx>bound){ m.dir=-m.dir; nx=clamp(nx,-bound,bound); }
     if(nz<-bound||nz>bound){ m.dir=Math.PI-m.dir; nz=clamp(nz,-bound,bound); }
     m.x=nx; m.z=nz; m.bob+=dt*8;
-    m.grp.position.set(nx, Math.abs(Math.sin(m.bob))*0.08, nz); m.grp.rotation.y=m.dir;
+    const cy=(m.climb>0)?-m.size*1.8*m.climb:Math.abs(Math.sin(m.bob))*0.06;
+    m.grp.position.set(nx,cy,nz); m.grp.rotation.y=m.dir;
+    if(m.climb>0) continue;
     const d=Math.hypot(nx-ball.x,nz-ball.z), reach=ball.r+m.size*0.7+0.05;
-    if(d<reach){
-      if(ball.r>=m.size*0.7){
-        snowMovers.splice(i,1);
-        falling.push({ grp:m.grp, x0:nx, z0:nz, y0:0.2, t:0, dur:0.4, spin:rand(4,9), tilt:rand(3,7), toY:Math.max(0.3,ball.r*0.5) });
-        ball.vol += Math.pow(m.size,3)*ABSORB*0.5; ball.score++; refreshBlue(); SFX.pop(ball.score); updateHUD();
-      } else { const ux=(ball.x-nx)/(d||1),uz=(ball.z-nz)/(d||1); ball.x=nx+ux*reach; ball.z=nz+uz*reach; }
+    if(d<reach && ball.r>=m.size*1.05){   // 충분히 크면 흡수
+      snowMovers.splice(i,1);
+      falling.push({ grp:m.grp, x0:nx, z0:nz, y0:0.2, t:0, dur:0.4, spin:rand(4,9), tilt:rand(3,7), toY:Math.max(0.3,ball.r*0.5) });
+      ball.vol+=Math.pow(m.size,3)*ABSORB*0.5; ball.score++; refreshBlue(); SFX.pop(ball.score); updateHUD(); continue;
     }
+    if(d<reach+0.5 && m.meleeCd<=0){ damage(snowEnemyDmg(m.kind), nx, nz); m.meleeCd=1.6; }       // 근접 공격
+    else if(m.ranged && m.throwCd<=0 && d<12 && d>2){ throwSnow(m); m.throwCd=rand(3,6); }          // 눈 던지기(가끔)
   }
-  // 받침 눈덩이 위로 올려 눈사람 완성
-  if(snowBase){
-    const b=snowBase.userData;
-    if(b.ring) snowBase.userData.ringT=(snowBase.userData.ringT||0)+dt;
-    if(snowBase.userData.ring) snowBase.userData.ring.material.opacity = ball.r>=snowTarget ? (0.35+0.4*Math.abs(Math.sin((snowBase.userData.ringT||0)*4))) : 0.3;
-    if(!snowAssemble && !ended && ball.r>=snowTarget){
-      const d=Math.hypot(ball.x-b.x, ball.z-b.z);
-      if(d < b.r + ball.r){ snowAssemble={ t:0, built:false }; }
-    }
+  for(const h of iceHoles){ h.t+=dt; if(h.t>=h.interval){ h.t=0; spawnSnowEnemy('penguin', h.x+rand(-0.5,0.5), h.z+rand(-0.5,0.5), true); } }
+  updateProjectiles(dt); updateSanta(dt);
+  if(hurtT>0) hurtT=Math.max(0,hurtT-dt);
+  if(snowBase){ const b=snowBase.userData;
+    snowBase.userData.ringT=(snowBase.userData.ringT||0)+dt;
+    if(b.ring) b.ring.material.opacity = ball.r>=snowTarget ? (0.35+0.4*Math.abs(Math.sin(snowBase.userData.ringT*4))) : 0.3;
+    if(!snowAssemble && !ended && ball.r>=snowTarget){ const d=Math.hypot(ball.x-b.x,ball.z-b.z); if(d<b.r+ball.r) snowAssemble={ t:0, built:false }; }
   }
   if(snowAssemble) updateAssemble(dt);
 }
@@ -1606,6 +1716,7 @@ function updatePuffs(dt){
 
 /* ===================== 움직임 & 카메라 ===================== */
 function updateBall(dt){
+  if(SNOW){ updateBallSnow(dt); return; }
   const inp = inputVector();
   const speed = (6.2 + ball.r*1.6) * inp.m;
   if(inp.m>0.01){
@@ -1731,7 +1842,7 @@ function emitState(){
     goalText: SNOW ? (ball.r>=snowTarget?'받침 눈덩이 위로! ⛄':'눈덩이 키우기')
               : (isMap||MODE==='room') ? (remain||holes.length? ('남은 구멍 '+(isMap?remain:holes.length)+'개'):'모든 구멍 제거!')
               : (goalPct>=1?'목표 달성!':'목표 '+fmtSizePlain(goalR())),
-    hasHp: isMap, hp: Math.round(ball.hp||0), hpMax: ball.hpMax||100, hpPct: (ball.hpMax? (ball.hp/ball.hpMax):1), hurt: hurtT>0,
+    hasHp: isMap||SNOW, hp: Math.round(ball.hp||0), hpMax: ball.hpMax||100, hpPct: (ball.hpMax? (ball.hp/ball.hpMax):1), hurt: hurtT>0,
     timeLeft: Math.max(0,Math.ceil(timeLeft)), mmss: fmtTime(Math.max(0,timeLeft)), warn: timeLeft<=15 });
 }
 function emitControls(){ EMIT({ type:'controls', music:musicOn, sound:soundOn, gyro:gyroOn }); }
@@ -1784,8 +1895,8 @@ function fmtSizePlain(r){ const cm=Math.round(r*100);
 function updateHUD(){
   document.getElementById('sizeVal').innerHTML = fmtSize(ball.r);
   const hw=document.getElementById('hpWrap');
-  if(hw){ hw.style.display = MAP>0?'flex':'none';
-    if(MAP>0){ const p=Math.max(0,ball.hpMax?ball.hp/ball.hpMax:1); const f=document.getElementById('hpFill');
+  if(hw){ hw.style.display = (MAP>0||SNOW)?'flex':'none';
+    if(MAP>0||SNOW){ const p=Math.max(0,ball.hpMax?ball.hp/ball.hpMax:1); const f=document.getElementById('hpFill');
       f.style.width=(p*100)+'%'; f.style.background = p<0.3?'#ff3b3b':p<0.6?'#ffb13a':'#4ad06a';
       document.getElementById('hpNum').textContent = Math.ceil(ball.hp)+' / '+ball.hpMax; } }
   if(SNOW){
@@ -1881,6 +1992,9 @@ function clearWorld(){
   attackTimer=0; chopperT=0; hurtT=0;
   if(snowBase){ scene.remove(snowBase); snowBase=null; }
   for(const m of snowMovers) scene.remove(m.grp); snowMovers=[]; snowAssemble=null;
+  for(const h of iceHoles) scene.remove(h.grp); iceHoles=[];
+  for(const p of projectiles) scene.remove(p.grp); projectiles=[];
+  if(santa){ scene.remove(santa); santa=null; } icePatches=[]; snowVel={x:0,z:0};
   roomSink=null; roomTotal=0; ballSink=null;
   blueBall.scale.setScalar(1); blueBall.quaternion.identity();
   ballGroup.scale.setScalar(1);
