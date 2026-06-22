@@ -799,6 +799,7 @@ let monsters=[], splats=[], spawners=[];
 let chopper=null, chopperT=0, attackTimer=0, bombs=[], hurtT=0;
 const MONSTER_CAP=34, FLATTEN_RATIO=0.8, AIR_ATTACK_EVERY=30;   // 공중 공격 주기(초)
 let SNOW=false, snowBase=null, snowMovers=[], snowTarget=1.2, snowAssemble=null;   // 눈사람 만들기 이벤트
+let mapWalls=[];   // 실내 맵 벽(카메라가 밖이면 투명 페이드)
 let icePatches=[], iceHoles=[], projectiles=[], santa=null, santaT=0, snowVel={x:0,z:0};   // 남극 테마
 
 /* --- 몬스터/사람 빌더 (size=충돌 반지름) --- */
@@ -1088,15 +1089,19 @@ const MAPS={
 function buildMapWorld(id){
   if(mapGroup) scene.remove(mapGroup);
   mapGroup=new THREE.Group(); scene.add(mapGroup);
-  windowGhost=null;
+  windowGhost=null; mapWalls=[];
   const cfg=MAPS[id], H=cfg.bound;
   if(cfg.indoor){
     const floor=new THREE.Mesh(new THREE.PlaneGeometry(H*2,H*2), new THREE.MeshPhongMaterial({color:cfg.floor,shininess:6,specular:0x101010}));
     floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; mapGroup.add(floor);
     for(let i=-H+2;i<H;i+=4){ const ln=new THREE.Mesh(new THREE.PlaneGeometry(H*2,0.1),new THREE.MeshBasicMaterial({color:cfg.line,transparent:true,opacity:0.5})); ln.rotation.x=-Math.PI/2; ln.position.set(0,0.011,i); mapGroup.add(ln); }
-    const wallMat=new THREE.MeshPhongMaterial({color:cfg.wall,shininess:3}); const WALL_H=cfg.wallH, T=0.8;
-    for(const [x,z,w,d] of [[0,-H,H*2,T],[0,H,H*2,T],[-H,0,T,H*2],[H,0,T,H*2]]){
-      const wall=new THREE.Mesh(new THREE.BoxGeometry(w,WALL_H,d),wallMat); wall.position.set(x,WALL_H/2,z); mapGroup.add(wall); }
+    const WALL_H=cfg.wallH, T=0.8;
+    // [x,z,w,d, 바깥방향 nx,nz] — 카메라가 그 벽 바깥에 있으면 투명 페이드
+    for(const [x,z,w,d,nx,nz] of [[0,-H,H*2,T,0,-1],[0,H,H*2,T,0,1],[-H,0,T,H*2,-1,0],[H,0,T,H*2,1,0]]){
+      const wall=new THREE.Mesh(new THREE.BoxGeometry(w,WALL_H,d),
+        new THREE.MeshPhongMaterial({color:cfg.wall,shininess:3,transparent:true,opacity:1}));
+      wall.position.set(x,WALL_H/2,z); mapGroup.add(wall);
+      mapWalls.push({ mesh:wall, nx, nz, lim:H }); }
     if(id===3){ // 마트 바닥: 통로 레인 + 노란 점선 + 서있는 안내판
       for(const lx of [-H*0.55,0,H*0.55]){ const lane=new THREE.Mesh(new THREE.PlaneGeometry(3.0,H*2-2),new THREE.MeshBasicMaterial({color:0xf4f7fa})); lane.rotation.x=-Math.PI/2; lane.position.set(lx,0.012,0); mapGroup.add(lane); }
       for(let z=-H+2;z<H;z+=2.6){ const d=new THREE.Mesh(new THREE.PlaneGeometry(0.35,1.1),new THREE.MeshBasicMaterial({color:0xf5c84a})); d.rotation.x=-Math.PI/2; d.position.set(0,0.014,z); mapGroup.add(d); }
@@ -1191,7 +1196,8 @@ function populateMap(id){
 function damage(amt, x, z){
   if(ended || ball.hp<=0) return;
   ball.hp = Math.max(0, ball.hp - amt);
-  hurtT = 0.35;                       // 피격 플래시(HUD가 읽음)
+  hurtT = 0.6;                        // 피격 표시(HUD가 읽음 — 게이지 번쩍+윽 표정)
+  SFX.hurt();                         // 윽! 비명
   if(x!=null){ const ux=(ball.x-x)/(Math.hypot(ball.x-x,ball.z-z)||1), uz=(ball.z-z)/(Math.hypot(ball.x-x,ball.z-z)||1);
     ball.x=clamp(ball.x+ux*0.6,-MAP_BOUND,MAP_BOUND); ball.z=clamp(ball.z+uz*0.6,-MAP_BOUND,MAP_BOUND); } // 넉백
   spawnPuff(ball.x,ball.z);
@@ -1768,6 +1774,15 @@ function updateCamera(dt){
   camera.position.y += (cy-camera.position.y)*Math.min(1,dt*4);
   camera.position.z += (cz-camera.position.z)*Math.min(1,dt*4);
   camera.lookAt(ball.x, lookY, ball.z);
+  // 실내 맵: 카메라가 벽 바깥에 있으면 그 벽을 투명하게(가려서 회색만 보이는 문제 해결)
+  if(mapWalls.length){
+    for(const w of mapWalls){
+      const proj = w.nx*camera.position.x + w.nz*camera.position.z;   // 바깥방향 투영
+      const out = proj > w.lim - 3.5;                                  // 벽 바깥(근접 포함)
+      const target = out ? 0.12 : 1.0;
+      w.mesh.material.opacity += (target - w.mesh.material.opacity)*Math.min(1,dt*10);
+    }
+  }
 
   if(MODE==='roll' && MAP===0 && !SNOW && prince){
     const pd = ball.r + 0.35;
@@ -1803,6 +1818,7 @@ const SFX={
   lose(){ [392,330,262].forEach((f,i)=>setTimeout(()=>tone(f,0.22,'sawtooth',0.18,f*0.7),i*150)); },
   loot(){ tone(880,0.06,'triangle',0.16); setTimeout(()=>tone(1245,0.10,'triangle',0.16),60); },
   scream(){ const b=300+Math.random()*140; tone(b,0.2,'sawtooth',0.22,b*0.32); tone(b*1.9,0.12,'square',0.09,b*0.5); }, // 으악!
+  hurt(){ tone(200,0.14,'square',0.2,90); tone(150,0.1,'sawtooth',0.12,70); }, // 윽! (주인공 피격)
 };
 const MEL=[0,4,7,4, 9,7,4,0, 5,9,5,2, 7,4,7,11];
 const BASS=[0,0,5,5, 7,7,2,2];
@@ -1986,7 +2002,7 @@ function clearWorld(){
   for(const m of monsters) scene.remove(m.grp); monsters=[];
   for(const s of splats) scene.remove(s.grp); splats=[];
   for(const s of spawners) scene.remove(s.grp); spawners=[];
-  if(mapGroup){ scene.remove(mapGroup); mapGroup=null; } windowGhost=null;
+  if(mapGroup){ scene.remove(mapGroup); mapGroup=null; } windowGhost=null; mapWalls=[];
   if(chopper){ scene.remove(chopper); chopper=null; }
   for(const b of bombs){ scene.remove(b.grp); if(b.mk) scene.remove(b.mk); } bombs=[];
   attackTimer=0; chopperT=0; hurtT=0;

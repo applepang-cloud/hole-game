@@ -49,11 +49,12 @@ const kEventModes = <GameMode>[
 GameMode _modeById(String id) => [...kMaps, ...kEventModes]
     .firstWhere((m) => m.id == id, orElse: () => kMaps.first);
 
-/// 스토리 컷씬 대사 한 줄 (left=화면 왼쪽 NPC / 오른쪽=별왕자)
+/// 스토리 컷씬 대사 한 줄 (left=화면 왼쪽 NPC / 오른쪽=주인공 퇴마사)
+/// img = assets/portraits/<img>.png 파일 키 (캐릭터 초상)
 class StoryLine {
   final bool left;
-  final String emoji, name, text;
-  const StoryLine(this.left, this.emoji, this.name, this.text);
+  final String img, name, text;
+  const StoryLine(this.left, this.img, this.name, this.text);
 }
 
 class MapStory {
@@ -61,49 +62,70 @@ class MapStory {
   const MapStory(this.intro, this.outro);
 }
 
-/// 맵 번호별 시작/종료 대사
+// 주인공: 변신 전 학생(student) → 퇴마사 소년(exorcist). 엄마=teacher2(이미지 재사용).
+/// 맵 번호별 시작/종료 대사 (퇴마사 소년 스토리)
 const kStory = <int, MapStory>{
+  // 맵1 내 방 — 어머니가 가문의 비밀을 알려주고 퇴마사로 변신
   1: MapStory([
-    StoryLine(true, '👩', '엄마', '방이 이게 뭐야! 벌레까지 나오잖니!'),
-    StoryLine(false, '🤴', '별왕자', '걱정 마세요, 다 굴려서 치울게요!'),
+    StoryLine(true, 'teacher2', '엄마', '도현아, 엄마가 꼭 해줄 이야기가 있단다.'),
+    StoryLine(false, 'student', '도현', '응? 갑자기 무슨 얘기야, 엄마?'),
+    StoryLine(true, 'teacher2', '엄마', '사실 우리 가족은… 대대로 악령을 쫓는 퇴마사 가문이란다.'),
+    StoryLine(false, 'student', '도현', '퇴마사…? 그런 게 정말 있어?'),
+    StoryLine(true, 'teacher2', '엄마', '요즘 마을 곳곳에 싱크홀이 생기고 있어. 그 구멍에서 악령의 기운이 새어나온단다.'),
+    StoryLine(true, 'teacher2', '엄마', '너는 네 아버지의 대를 잇는 퇴마사야. 자, 이 옷을 입으렴.'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '…옷을 입으니 온몸에 힘이 솟아! 내가 막을게요, 엄마!'),
   ], [
-    StoryLine(false, '🤴', '별왕자', '방 청소 끝! 구멍도 다 막았어요.'),
-    StoryLine(true, '👩', '엄마', '어머 반짝반짝하네! 다음은 마당이란다~'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '내 방의 싱크홀을 전부 메웠어요!'),
+    StoryLine(true, 'teacher2', '엄마', '잘했어. 하지만 이건 시작일 뿐이란다.'),
+    StoryLine(true, 'teacher2', '엄마', '마당에도 구멍이 번지고 있어. 어서 가보자.'),
   ]),
+  // 맵2 마당 — 엄마와 함께
   2: MapStory([
-    StoryLine(true, '🧑‍🌾', '이웃', '마당 바닥에서 유령이 스멀스멀 올라와!'),
-    StoryLine(false, '🤴', '별왕자', '구멍부터 메우면 못 나와요!'),
+    StoryLine(true, 'teacher2', '엄마', '마당 바닥이 갈라지고 구멍이 생겼어!'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '유령이 기어나오기 전에 구멍부터 막을게요.'),
+    StoryLine(true, 'teacher2', '엄마', '조심하렴. 악령은 점점 강해진단다.'),
   ], [
-    StoryLine(false, '🤴', '별왕자', '마당 구멍 전부 막았다!'),
-    StoryLine(true, '🧑‍🌾', '이웃', '평화로워졌어. 마트도 도와주겠니?'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '마당의 구멍, 전부 봉인 완료!'),
+    StoryLine(true, 'teacher2', '엄마', '역시 내 아들. 다음은 마트로 가보렴.'),
   ]),
+  // 맵3 마트 — 마트 사장님
   3: MapStory([
-    StoryLine(true, '🧑‍💼', '점원', '마트에 좀비가 가득해요!'),
-    StoryLine(false, '🤴', '별왕자', '구멍을 메우면 더는 안 나와요!'),
+    StoryLine(true, 'shop1', '마트 사장', '퇴마사님! 마트 바닥 구멍에서 좀비가 쏟아져 나와요!'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '걱정 마세요. 구멍부터 막으면 멈춥니다.'),
+    StoryLine(true, 'shop2', '마트 사장', '부탁드려요, 손님들이 위험해요!'),
   ], [
-    StoryLine(false, '🤴', '별왕자', '좀비 구멍 봉쇄 완료!'),
-    StoryLine(true, '🧑‍💼', '점원', '덕분에 살았어요! 학교도 위험하대요.'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '좀비 구멍 전부 봉인했습니다.'),
+    StoryLine(true, 'shop2', '마트 사장', '정말 감사해요! 학교도 위험하다던데…'),
   ]),
+  // 맵4 학교 — 선생님
   4: MapStory([
-    StoryLine(true, '👩‍🏫', '선생님', '학교에 도깨비랑 해골이 나타났어!'),
-    StoryLine(false, '🤴', '별왕자', '방과 후 대청소 시작!'),
+    StoryLine(true, 'teacher1', '선생님', '퇴마사님, 학교에 도깨비와 해골이 나타났어요!'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '아이들은 제가 지키겠습니다. 구멍을 막죠.'),
+    StoryLine(true, 'teacher1', '선생님', '부디 학생들을 부탁드려요!'),
   ], [
-    StoryLine(false, '🤴', '별왕자', '교실 정리 끝!'),
-    StoryLine(true, '👩‍🏫', '선생님', '조용해졌구나. 다음은 도시야.'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '교실의 구멍, 정리 끝!'),
+    StoryLine(true, 'teacher1', '선생님', '고마워요. 도시 쪽도 심상치 않대요.'),
   ]),
+  // 맵5 도시 — 시민(+도시 선생님)
   5: MapStory([
-    StoryLine(true, '🦺', '구청장', '도시 거리가 온통 구멍투성이야!'),
-    StoryLine(false, '🤴', '별왕자', '내가 굴러서 지킬게요!'),
+    StoryLine(true, 'citizen', '시민', '퇴마사님! 도시 거리가 온통 구멍투성이예요!'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '사람들을 대피시키세요. 제가 막겠습니다.'),
+    StoryLine(true, 'cityteacher2', '도시 선생님', '저도 봤어요, 구멍에서 도깨비가 튀어나와요!'),
   ], [
-    StoryLine(false, '🤴', '별왕자', '도시를 구했다!'),
-    StoryLine(true, '🦺', '구청장', '영웅이야! 마지막은… 저승이라네.'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '도시의 구멍, 전부 봉인!'),
+    StoryLine(true, 'citizen', '시민', '영웅이세요! 마지막은… 공동묘지라고 들었어요.'),
   ]),
+  // 맵6 공동묘지 — 좀비 등장 후 묘지기와 대화
   6: MapStory([
-    StoryLine(true, '💀', '저승사자', '여기까지 굴러오다니…'),
-    StoryLine(false, '🤴', '별왕자', '마지막 구멍, 내가 막는다!'),
+    StoryLine(true, 'zombie1', '좀비', '크아아아…!'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '윽…! 악령의 기운이 가장 짙은 곳이다…!'),
+    StoryLine(true, 'keeper', '묘지기', '퇴마사여. 자네를 기다리고 있었네.'),
+    StoryLine(true, 'keeper', '묘지기', '이곳의 싱크홀을 막지 못하면 마을 전체가 삼켜진다네.'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '아버지의 대를 잇는 자로서, 반드시 막겠습니다!'),
   ], [
-    StoryLine(false, '🤴', '별왕자', '모든 구멍을 막았다! 대모험 끝!'),
-    StoryLine(true, '💀', '저승사자', '훌륭하다… 이제 집으로 돌아가거라.'),
+    StoryLine(false, 'exorcist', '퇴마사 도현', '모든 싱크홀을 봉인했다! 악령은 물러갔다.'),
+    StoryLine(true, 'keeper', '묘지기', '훌륭하네. 자네는 진정한 퇴마사야.'),
+    StoryLine(true, 'keeper', '묘지기', '이제 마을은 안전하네. 집으로 돌아가게.'),
   ]),
 };
 
@@ -115,7 +137,7 @@ class HoleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '굴려라! — 데굴데굴 별왕자',
+      title: '굴려라! — 퇴마사 소년',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         fontFamily: 'Malgun Gothic',
@@ -469,13 +491,12 @@ class _HudOverlay extends StatelessWidget {
       children: [
         // 이동 입력(조이스틱) — 맨 아래 레이어. 위의 버튼이 우선 히트테스트됨.
         if (!paused) Positioned.fill(child: _GameInputLayer(onInput: onInput)),
-        // 피격 빨강 플래시
-        if (state['hurt'] == true)
-          const Positioned.fill(child: IgnorePointer(child: ColoredBox(color: Color(0x33FF2222)))),
         // HUD 표시(크기/타이머/카운트/목표) — 입력을 막지 않도록 IgnorePointer
         IgnorePointer(child: _readout(stageW)),
-        // 체력 게이지 (좌하단)
+        // 체력 게이지 (좌하단) + 피격 시 게이지 번쩍 + 아파하는 주인공 얼굴/윽!
         if (state['hasHp'] == true) Positioned(left: 10, bottom: 16, child: _hpBar()),
+        if (state['hasHp'] == true && state['hurt'] == true)
+          Positioned(left: 8, bottom: 38, child: IgnorePointer(child: _hurtFace())),
         // 오디오/자이로 토글 (우하단)
         Positioned(right: 10, bottom: 14, child: _audioBar()),
         // 일시정지 버튼 (상단 중앙)
@@ -486,24 +507,55 @@ class _HudOverlay extends StatelessWidget {
     );
   }
 
+  // 피격 시 게이지 옆에 뜨는 아파하는 주인공 얼굴 + 윽!
+  Widget _hurtFace() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 46, height: 46,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFFF3B3B), width: 2),
+            boxShadow: const [BoxShadow(color: Color(0x88FF2222), blurRadius: 10)],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: ColorFiltered(
+            colorFilter: const ColorFilter.mode(Color(0x55FF2222), BlendMode.srcATop),
+            child: Image.asset('assets/portraits/exorcist.png', fit: BoxFit.cover,
+                errorBuilder: (c, e, s) => const SizedBox()),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(color: const Color(0xEEFF3B3B), borderRadius: BorderRadius.circular(8)),
+          child: const Text('윽!', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.white)),
+        ),
+      ],
+    );
+  }
+
   Widget _hpBar() {
     final p = ((state['hpPct'] as num?)?.toDouble() ?? 1).clamp(0.0, 1.0);
     final col = p < 0.3 ? const Color(0xFFFF3B3B) : p < 0.6 ? const Color(0xFFFFB13A) : const Color(0xFF4AD06A);
     final hp = (state['hp'] as num?)?.toInt() ?? 0;
     final hpMax = (state['hpMax'] as num?)?.toInt() ?? 0;
+    final hurt = state['hurt'] == true;
     return SizedBox(
       width: 178,
       child: Row(
         children: [
-          const Text('❤️', style: TextStyle(fontSize: 15)),
+          Text('❤️', style: TextStyle(fontSize: hurt ? 19 : 15)),
           const SizedBox(width: 6),
           Expanded(
             child: Container(
               height: 15,
               decoration: BoxDecoration(
                 color: const Color(0x55000000),
-                border: Border.all(color: Colors.white, width: 2),
+                border: Border.all(color: hurt ? const Color(0xFFFF3B3B) : Colors.white, width: hurt ? 3 : 2),
                 borderRadius: BorderRadius.circular(10),
+                boxShadow: hurt ? const [BoxShadow(color: Color(0xAAFF2222), blurRadius: 10)] : null,
               ),
               clipBehavior: Clip.antiAlias,
               child: Stack(
@@ -846,15 +898,21 @@ class _HomeMenu extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('🤴', style: TextStyle(fontSize: 70)),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Image.asset('assets/portraits/exorcist.png',
+                width: 96, height: 96, fit: BoxFit.cover,
+                errorBuilder: (c, e, s) => const Text('🧑‍🚀', style: TextStyle(fontSize: 70))),
+          ),
+          const SizedBox(height: 6),
           const Text('굴려라!',
               style: TextStyle(
                   fontSize: 52,
                   fontWeight: FontWeight.w900,
                   color: Colors.white,
                   shadows: [Shadow(color: Color(0xFFE8552D), offset: Offset(0, 4), blurRadius: 0)])),
-          const Text('데굴데굴 별왕자',
-              style: TextStyle(fontSize: 17, color: Colors.white, fontWeight: FontWeight.bold)),
+          const Text('퇴마사 소년의 싱크홀 봉인',
+              style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
           const SizedBox(height: 40),
           _bigMenu('📖', '스토리', '맵을 순서대로 모험', const Color(0xFFEF5D1E), onStory),
           const SizedBox(height: 16),
@@ -1102,25 +1160,28 @@ class _DialogueOverlayState extends State<_DialogueOverlay> {
     );
   }
 
-  // 왼쪽 슬롯=NPC, 오른쪽 슬롯=별왕자. 말하는 캐릭터는 크게/선명, 상대는 작게/흐리게.
+  // 왼쪽 슬롯=NPC, 오른쪽 슬롯=주인공. 말하는 캐릭터는 크게/선명, 상대는 작게/흐리게.
   Widget _char(StoryLine line, bool leftSlot) {
+    // 이 슬롯의 최근(현재까지) 캐릭터 — 없으면 표시 안 함
+    StoryLine? c;
+    for (int k = _i; k >= 0; k--) {
+      if (widget.lines[k].left == leftSlot) { c = widget.lines[k]; break; }
+    }
+    if (c == null) return const SizedBox(width: 1, height: 1);
     final speaking = line.left == leftSlot;
-    final emoji = leftSlot ? _lastLeftEmoji() : '🤴';
     return AnimatedScale(
       duration: const Duration(milliseconds: 180),
-      scale: speaking ? 1.0 : 0.82,
+      scale: speaking ? 1.0 : 0.84,
       child: Opacity(
-        opacity: speaking ? 1.0 : 0.45,
-        child: Text(emoji, style: const TextStyle(fontSize: 84)),
+        opacity: speaking ? 1.0 : 0.5,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Image.asset('assets/portraits/${c.img}.png',
+              width: 132, height: 150, fit: BoxFit.cover,
+              errorBuilder: (ctx, e, s) => const SizedBox(width: 132, height: 150)),
+        ),
       ),
     );
-  }
-
-  String _lastLeftEmoji() {
-    for (int k = _i; k >= 0; k--) {
-      if (widget.lines[k].left) return widget.lines[k].emoji;
-    }
-    return widget.lines.firstWhere((l) => l.left, orElse: () => widget.lines.first).emoji;
   }
 
   Widget _bubble(StoryLine line) {
