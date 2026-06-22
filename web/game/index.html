@@ -216,6 +216,11 @@
             <b>구멍 빨아들이기</b>
             <em>구멍으로 물건을 쏙쏙 삼킨다</em>
           </button>
+          <button class="modebtn" id="modeSnow">
+            <span class="ic">⛄</span>
+            <b>눈사람 만들기</b>
+            <em>눈덩이를 굴려 키워 눈사람 완성!</em>
+          </button>
         </div>
       </div>
       <div class="hint">📱 버튼을 켜면 기울기로 조작 · 🔊 소리 켜면 더 신난다</div>
@@ -793,6 +798,7 @@ let MAP=0, MAP_BOUND=GROUND-2, mapGroup=null, windowGhost=null, ambT=0, ballSink
 let monsters=[], splats=[], spawners=[];
 let chopper=null, chopperT=0, attackTimer=0, bombs=[], hurtT=0;
 const MONSTER_CAP=34, FLATTEN_RATIO=0.8, AIR_ATTACK_EVERY=30;   // 공중 공격 주기(초)
+let SNOW=false, snowBase=null, snowMovers=[], snowTarget=1.2, snowAssemble=null;   // 눈사람 만들기 이벤트
 
 /* --- 몬스터/사람 빌더 (size=충돌 반지름) --- */
 function buildAnt(){ const g=new THREE.Group(); const c=0x3a2418;
@@ -1254,6 +1260,112 @@ function updateMapExtras(dt){
     const M=windowGhost.userData.mats; M[0].opacity=o; M[1].opacity=o; windowGhost.position.x=Math.sin(ambT*0.4)*1.1; }
 }
 
+/* ===================== ⛄ 눈사람 만들기 (이벤트 미니게임) ===================== */
+function buildSnowPine(){ const g=new THREE.Group();
+  const tr=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.16,0.6,6),MAT(0x7a5a3a)); tr.position.y=0.3; g.add(tr);
+  for(let i=0;i<3;i++){ const c=new THREE.Mesh(new THREE.ConeGeometry(0.7-i*0.18,0.7,7),MAT(0x3f7a4a)); c.position.y=0.7+i*0.45; g.add(c);
+    const snow=new THREE.Mesh(new THREE.ConeGeometry(0.72-i*0.18,0.25,7),MAT(0xffffff)); snow.position.y=0.92+i*0.45; g.add(snow); }
+  return g; }
+function buildSnowPile(){ const g=new THREE.Group();
+  for(let i=0;i<3;i++){ const s=new THREE.Mesh(new THREE.IcosahedronGeometry(rand(0.16,0.26),0),MAT(0xffffff));
+    s.position.set(rand(-0.18,0.18),rand(0.08,0.2),rand(-0.18,0.18)); g.add(s); }
+  return tag(g,0.3,0); }
+function buildSnowBall(r){ const g=new THREE.Group();
+  const b=new THREE.Mesh(new THREE.IcosahedronGeometry(r,1),new THREE.MeshPhongMaterial({color:0xffffff,flatShading:true,shininess:24,specular:0xbfe6ff})); b.position.y=r; g.add(b);
+  return g; }
+function buildSnowCritter(){ const g=new THREE.Group(); const m=new THREE.MeshPhongMaterial({color:0xf3f9ff,flatShading:true});
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.24,9,7),m); body.position.y=0.22; g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.16,9,7),m); head.position.y=0.5; g.add(head);
+  for(const sx of[-1,1]){ const eye=new THREE.Mesh(new THREE.SphereGeometry(0.03,5,4),MAT(0x222630)); eye.position.set(sx*0.06,0.54,0.14); g.add(eye); }
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(0.03,0.12,5),MAT(0xff7a18)); nose.position.set(0,0.5,0.18); nose.rotation.x=Math.PI/2; g.add(nose);
+  addShadow(g,0.26); return tag(g,0.34,0); }
+function buildSnowBaseBody(){ const g=new THREE.Group(); const r=1.4;
+  const b=new THREE.Mesh(new THREE.IcosahedronGeometry(r,1),new THREE.MeshPhongMaterial({color:0xffffff,flatShading:true,shininess:24,specular:0xbfe6ff})); b.position.y=r; g.add(b);
+  // 받침 표시 링
+  const ring=new THREE.Mesh(new THREE.RingGeometry(r+0.3,r+0.7,28),new THREE.MeshBasicMaterial({color:0x4fb0e0,transparent:true,opacity:0.55,side:THREE.DoubleSide}));
+  ring.rotation.x=-Math.PI/2; ring.position.y=0.05; g.add(ring); g.userData.ring=ring;
+  addShadow(g,r); return g; }
+
+function addSnowMover(x,z){
+  const g=buildSnowCritter(); g.position.set(x,0,z); scene.add(g);
+  snowMovers.push({ grp:g, x, z, size:g.userData.size, dir:Math.random()*6.28, speed:rand(1.0,2.0), bob:Math.random()*6.28 });
+}
+function buildSnowWorld(){
+  if(mapGroup) scene.remove(mapGroup);
+  mapGroup=new THREE.Group(); scene.add(mapGroup); windowGhost=null;
+  const H=22;
+  mapGroup.add(new THREE.Mesh(new THREE.SphereGeometry(H+60,18,12),new THREE.MeshBasicMaterial({color:0xcfe8ff,side:THREE.BackSide,fog:false})));
+  const ground=new THREE.Mesh(new THREE.CircleGeometry(H+30,44),new THREE.MeshPhongMaterial({color:0xeef5ff,shininess:12,specular:0x22384a})); ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; mapGroup.add(ground);
+  for(let i=0;i<6;i++){ const a=i/6*Math.PI*2; const hill=new THREE.Mesh(new THREE.SphereGeometry(rand(6,11),10,8),MAT(0xe6f0fb)); hill.position.set(Math.cos(a)*(H+16),-rand(3,7),Math.sin(a)*(H+16)); mapGroup.add(hill); }
+  for(let i=0;i<10;i++){ const t=buildSnowPine(); const a=Math.random()*6.28, d=rand(H*0.55,H-2); t.position.set(Math.cos(a)*d,0,Math.sin(a)*d); t.scale.setScalar(rand(0.8,1.6)); mapGroup.add(t); }
+}
+function populateSnow(){
+  const H=20;
+  for(let i=0;i<46;i++) addProp(buildSnowPile(), rand(-H,H), rand(-H,H), rand(0.7,2.4));   // 다양한 크기 눈더미
+  for(let i=0;i<8;i++)  addProp(buildSnowCritter(), rand(-H,H), rand(-H,H), rand(0.9,1.6)); // 흩어진 눈 인간/몬스터
+  for(let i=0;i<6;i++)  addSnowMover(rand(-H,H), rand(-H,H));                                 // 움직이는 눈 몬스터
+  const bx=rand(-H*0.4,H*0.4), bz=H*0.62;
+  snowBase=buildSnowBaseBody(); snowBase.position.set(bx,0,bz); scene.add(snowBase);
+  snowBase.userData.x=bx; snowBase.userData.z=bz; snowBase.userData.r=1.4;
+  snowTarget=1.2;
+}
+function updateSnow(dt){
+  const bound=MAP_BOUND-0.5;
+  // 움직이는 눈 몬스터(잡으면 흡수해 성장)
+  for(let i=snowMovers.length-1;i>=0;i--){ const m=snowMovers[i];
+    m.dir += (Math.random()-0.5)*1.2*dt;
+    let nx=m.x+Math.sin(m.dir)*m.speed*dt, nz=m.z+Math.cos(m.dir)*m.speed*dt;
+    if(nx<-bound||nx>bound){ m.dir=-m.dir; nx=clamp(nx,-bound,bound); }
+    if(nz<-bound||nz>bound){ m.dir=Math.PI-m.dir; nz=clamp(nz,-bound,bound); }
+    m.x=nx; m.z=nz; m.bob+=dt*8;
+    m.grp.position.set(nx, Math.abs(Math.sin(m.bob))*0.08, nz); m.grp.rotation.y=m.dir;
+    const d=Math.hypot(nx-ball.x,nz-ball.z), reach=ball.r+m.size*0.7+0.05;
+    if(d<reach){
+      if(ball.r>=m.size*0.7){
+        snowMovers.splice(i,1);
+        falling.push({ grp:m.grp, x0:nx, z0:nz, y0:0.2, t:0, dur:0.4, spin:rand(4,9), tilt:rand(3,7), toY:Math.max(0.3,ball.r*0.5) });
+        ball.vol += Math.pow(m.size,3)*ABSORB*0.5; ball.score++; refreshBlue(); SFX.pop(ball.score); updateHUD();
+      } else { const ux=(ball.x-nx)/(d||1),uz=(ball.z-nz)/(d||1); ball.x=nx+ux*reach; ball.z=nz+uz*reach; }
+    }
+  }
+  // 받침 눈덩이 위로 올려 눈사람 완성
+  if(snowBase){
+    const b=snowBase.userData;
+    if(b.ring) snowBase.userData.ringT=(snowBase.userData.ringT||0)+dt;
+    if(snowBase.userData.ring) snowBase.userData.ring.material.opacity = ball.r>=snowTarget ? (0.35+0.4*Math.abs(Math.sin((snowBase.userData.ringT||0)*4))) : 0.3;
+    if(!snowAssemble && !ended && ball.r>=snowTarget){
+      const d=Math.hypot(ball.x-b.x, ball.z-b.z);
+      if(d < b.r + ball.r){ snowAssemble={ t:0, built:false }; }
+    }
+  }
+  if(snowAssemble) updateAssemble(dt);
+}
+function addSnowmanHead(base, r){
+  const b=base.userData; const m=new THREE.MeshPhongMaterial({color:0xffffff,flatShading:true,shininess:24,specular:0xbfe6ff});
+  const head=new THREE.Mesh(new THREE.IcosahedronGeometry(r,1),m); head.position.y=b.r*2 + r*0.85; base.add(head);
+  const hy=b.r*2 + r*0.85;
+  for(const sx of[-1,1]){ const eye=new THREE.Mesh(new THREE.SphereGeometry(r*0.1,7,6),MAT(0x222630)); eye.position.set(sx*r*0.32, hy+r*0.28, r*0.86); base.add(eye); }
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(r*0.12,r*0.5,7),MAT(0xff7a18)); nose.position.set(0,hy+r*0.05,r*0.9); nose.rotation.x=Math.PI/2; base.add(nose);
+  for(let i=0;i<5;i++){ const dot=new THREE.Mesh(new THREE.SphereGeometry(r*0.06,6,5),MAT(0x222630)); const a=(i-2)*0.32; dot.position.set(Math.sin(a)*r*0.42, hy-r*0.28-Math.cos(a)*r*0.05, r*0.86); base.add(dot); }
+  // 나뭇가지 팔(몸통)
+  for(const sx of[-1,1]){ const arm=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.07,b.r*1.5,5),MAT(0x7a5a3a)); arm.position.set(sx*b.r*0.9, b.r*1.1, 0); arm.rotation.z=sx*1.1; base.add(arm); }
+  // 양동이 모자
+  const hat=new THREE.Mesh(new THREE.CylinderGeometry(r*0.5,r*0.6,r*0.7,12),MAT(0xc0573a)); hat.position.set(0,hy+r*0.95,0); base.add(hat);
+  const brim=new THREE.Mesh(new THREE.CylinderGeometry(r*0.75,r*0.75,r*0.12,12),MAT(0x8a3f2c)); brim.position.set(0,hy+r*0.6,0); base.add(brim);
+}
+function updateAssemble(dt){
+  const b=snowBase.userData; snowAssemble.t+=dt; const t=Math.min(1,snowAssemble.t/1.2);
+  moveVec={x:0,y:0};
+  ball.x += (b.x-ball.x)*Math.min(1,dt*5); ball.z += (b.z-ball.z)*Math.min(1,dt*5);
+  blueBall.position.set(ball.x, ball.r + t*(b.r*2), ball.z);
+  if(t>=0.7 && !snowAssemble.built){
+    snowAssemble.built=true; blueBall.visible=false;
+    addSnowmanHead(snowBase, ball.r);
+    spawnPuff(b.x,b.z); spawnPuff(b.x,b.z);
+  }
+  if(t>=1 && !ended) finish(true, '눈사람 완성! ⛄');
+}
+
 /* ===================== 입력 (조이스틱 + 키보드) ===================== */
 const stickEl = document.getElementById('stick'), knobEl = document.getElementById('stickKnob');
 let touchActive=false, touchId=null, originX=0, originY=0, moveVec={x:0,y:0};
@@ -1464,7 +1576,7 @@ function updateAbsorb(dt){
         // 가구/큰 사물 → 충분히 크면 납작(squash)→펑, 아니면 벽
         if(r >= it.size*FLATTEN_RATIO){ loose.splice(i,1); squash(it.grp,it.x,it.z,it.size,0.45); }
         else { const nx=(ball.x-it.x)/(d||1), nz=(ball.z-it.z)/(d||1); ball.x=it.x+nx*reach; ball.z=it.z+nz*reach; }
-      } else if(it.size <= r*PICK_RATIO){ MAP>0 ? mapSwallow(it) : collect(it); }
+      } else if(it.size <= r*PICK_RATIO){ (MAP>0||SNOW) ? mapSwallow(it) : collect(it); }
       else {
         // 너무 큰 물건 → 벽처럼 밀어냄
         const nx=(ball.x-it.x)/(d||1), nz=(ball.z-it.z)/(d||1);
@@ -1507,11 +1619,11 @@ function updateBall(dt){
     ball.heading = Math.atan2(ux, uz);
     const axis = _v.set(uz, 0, -ux).normalize();
     _q.setFromAxisAngle(axis, dist / ball.r);
-    (MAP>0 ? blueBall : ballGroup).quaternion.premultiply(_q);
+    ((MAP>0||SNOW) ? blueBall : ballGroup).quaternion.premultiply(_q);
   }
   const lim=MAP_BOUND;
   ball.x=clamp(ball.x,-lim,lim); ball.z=clamp(ball.z,-lim,lim);
-  (MAP>0 ? blueBall : ballGroup).position.set(ball.x, ball.r, ball.z);
+  ((MAP>0||SNOW) ? blueBall : ballGroup).position.set(ball.x, ball.r, ball.z);
 }
 
 function updateHole(dt){
@@ -1546,7 +1658,7 @@ function updateCamera(dt){
   camera.position.z += (cz-camera.position.z)*Math.min(1,dt*4);
   camera.lookAt(ball.x, lookY, ball.z);
 
-  if(MODE==='roll' && MAP===0 && prince){
+  if(MODE==='roll' && MAP===0 && !SNOW && prince){
     const pd = ball.r + 0.35;
     prince.position.set(ball.x - Math.sin(ball.heading)*pd, 0, ball.z - Math.cos(ball.heading)*pd);
     prince.rotation.y = ball.heading;
@@ -1604,17 +1716,20 @@ function EMIT(o){ try{ if(window.parent && window.parent!==window) window.parent
 function fmtTime(t){ const m=Math.floor(t/60), s=Math.floor(t%60); return m+':'+String(s).padStart(2,'0'); }
 function emitState(){
   const isMap = MAP>0, remain = spawners.length;
-  const goalPct = isMap
+  const goalPct = SNOW
+    ? clamp((ball.r-START_R)/(snowTarget-START_R),0,1)
+    : isMap
     ? (holeTotal? (holeTotal-remain)/holeTotal : 0)
     : MODE==='room'
       ? (roomTotal? (roomTotal-holes.length)/roomTotal : 0)
       : clamp((ball.r-START_R)/(goalR()-START_R),0,1);
-  EMIT({ type:'state', mode:MODE,
+  EMIT({ type:'state', mode: SNOW?'snow':MODE,
     size: fmtSizePlain(ball.r), sizeCm: Math.round(ball.r*100),
     count: isMap? remain : (MODE==='room'? holes.length : ball.score),
-    countLabel: (isMap||MODE==='room')?'남은 구멍':MODE==='hole'?'빨아들인':'모은 물건',
+    countLabel: SNOW?'모은 눈':(isMap||MODE==='room')?'남은 구멍':MODE==='hole'?'빨아들인':'모은 물건',
     goalPct: goalPct,
-    goalText: (isMap||MODE==='room') ? (remain||holes.length? ('남은 구멍 '+(isMap?remain:holes.length)+'개'):'모든 구멍 제거!')
+    goalText: SNOW ? (ball.r>=snowTarget?'받침 눈덩이 위로! ⛄':'눈덩이 키우기')
+              : (isMap||MODE==='room') ? (remain||holes.length? ('남은 구멍 '+(isMap?remain:holes.length)+'개'):'모든 구멍 제거!')
               : (goalPct>=1?'목표 달성!':'목표 '+fmtSizePlain(goalR())),
     hasHp: isMap, hp: Math.round(ball.hp||0), hpMax: ball.hpMax||100, hpPct: (ball.hpMax? (ball.hp/ball.hpMax):1), hurt: hurtT>0,
     timeLeft: Math.max(0,Math.ceil(timeLeft)), mmss: fmtTime(Math.max(0,timeLeft)), warn: timeLeft<=15 });
@@ -1642,7 +1757,9 @@ window.__HOLE = {
   get flats(){ return loose.filter(function(o){return o.kind==='flat';}).length; },
   get ballR(){ return ball.r; }, get score(){ return ball.score; }, get running(){ return running; },
   kinds(){ var k={}; monsters.forEach(function(m){k[m.kind]=(k[m.kind]||0)+1;}); return k; },
-  step(dt){ dt=dt||0.05; if(running&&!ended){ if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0) updateMapExtras(dt); } } updateSplats(dt); },
+  step(dt){ dt=dt||0.05; if(running&&!ended){ if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0){ updateMapExtras(dt); updateFalling(dt); } else if(SNOW){ updateSnow(dt); updateFalling(dt); } } } updateSplats(dt); },
+  get snow(){ return SNOW; }, get snowMovers(){ return snowMovers.length; }, get assembling(){ return !!snowAssemble; },
+  snowTest(){ if(!SNOW||!snowBase) return 'not snow'; ball.vol=Math.pow((snowTarget+0.15)/START_R,3)-1; refreshBlue(); ball.x=snowBase.userData.x; ball.z=snowBase.userData.z; for(var i=0;i<40;i++) window.__HOLE.step(0.05); return JSON.stringify({ ended:ended, running:running, assembled: !!(snowAssemble&&snowAssemble.built) }); },
   warp(r){ ball.vol=Math.pow(r/START_R,3)-1; refreshActive(); },  // 공 크기 강제(테스트)
   get paused(){ return !running && !ended; },
   get holeTotal(){ return holeTotal; },
@@ -1671,7 +1788,12 @@ function updateHUD(){
     if(MAP>0){ const p=Math.max(0,ball.hpMax?ball.hp/ball.hpMax:1); const f=document.getElementById('hpFill');
       f.style.width=(p*100)+'%'; f.style.background = p<0.3?'#ff3b3b':p<0.6?'#ffb13a':'#4ad06a';
       document.getElementById('hpNum').textContent = Math.ceil(ball.hp)+' / '+ball.hpMax; } }
-  if(MAP>0){
+  if(SNOW){
+    document.getElementById('cnt').textContent = ball.score;
+    const prog = clamp((ball.r-START_R)/(snowTarget-START_R),0,1);
+    document.getElementById('goalFill').style.width=(prog*100)+'%';
+    document.getElementById('goalTxt').textContent = ball.r>=snowTarget? '받침 눈덩이 위로! ⛄' : '눈덩이 키우기';
+  } else if(MAP>0){
     const remaining=spawners.length, cleared=holeTotal-remaining;
     document.getElementById('cnt').textContent = remaining;
     const prog = holeTotal? cleared/holeTotal : 0;
@@ -1693,7 +1815,7 @@ function updateHUD(){
 }
 function updateModeUI(){
   document.getElementById('cntLabel').textContent =
-    MAP>0 ? '남은 구멍' : MODE==='hole' ? '빨아들인' : MODE==='room' ? '남은 구멍' : '모은 물건';
+    SNOW ? '모은 눈' : MAP>0 ? '남은 구멍' : MODE==='hole' ? '빨아들인' : MODE==='room' ? '남은 구멍' : '모은 물건';
 }
 function updateTime(){
   const m=Math.floor(timeLeft/60), s=Math.floor(timeLeft%60);
@@ -1708,7 +1830,7 @@ function loop(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   try{
   if(running && !ended){
-    if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0){ updateMapExtras(dt); updateFalling(dt); } }
+    if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0){ updateMapExtras(dt); updateFalling(dt); } else if(SNOW){ updateSnow(dt); updateFalling(dt); } }
     else if(MODE==='hole'){ updateHole(dt); updateAbsorbHole(dt); updateFalling(dt); }
     else { updateRoom(dt); updateFalling(dt); }
     updateCamera(dt);
@@ -1757,24 +1879,44 @@ function clearWorld(){
   if(chopper){ scene.remove(chopper); chopper=null; }
   for(const b of bombs){ scene.remove(b.grp); if(b.mk) scene.remove(b.mk); } bombs=[];
   attackTimer=0; chopperT=0; hurtT=0;
+  if(snowBase){ scene.remove(snowBase); snowBase=null; }
+  for(const m of snowMovers) scene.remove(m.grp); snowMovers=[]; snowAssemble=null;
   roomSink=null; roomTotal=0; ballSink=null;
   blueBall.scale.setScalar(1); blueBall.quaternion.identity();
   ballGroup.scale.setScalar(1);
 }
 function beginRound(mode){
-  // 맵 모드(map1/2/3) → 롤 메커니즘 + 테마 레벨
+  // 맵 모드(map1~6) → 롤 메커니즘 + 테마 레벨 / snow → 눈사람 만들기 이벤트
   let mapId=0; const mm=/^map([1-6])$/.exec(mode||'');
   if(mm){ mapId=+mm[1]; mode='roll'; }
+  SNOW = (mode==='snow'); if(SNOW) mode='roll';
   MAP = mapId; MODE = mode;
   clearWorld();
   ball = { x:0, z:0, r:START_R, vol:0, area:Math.PI*START_R*START_R, heading:0, score:0, hp:300, hpMax:300 };
   camYaw = 0;
   ballGroup.quaternion.identity();
   MAP_BOUND = (MAP>0) ? MAPS[MAP].bound-1 : GROUND-2;
+  if(SNOW){
+    outdoorGroup.visible=false; skyDome.visible=false; roomGroup.visible=false;
+    MAP_BOUND = 21;
+    buildSnowWorld();
+    blueCore.material.color.setHex(0xffffff);   // 파란 볼 → 흰 눈덩이
+    refreshBlue();
+    blueBall.visible=true; ballGroup.visible=false; prince.visible=false; holeGroup.visible=false;
+    camera.position.set(0, 5.4, -7.4);
+    populateSnow();
+    document.getElementById('start').classList.add('hidden');
+    document.getElementById('end').classList.add('hidden');
+    running=true; ended=false; timeLeft=ROUND_TIME; growMark=START_R;
+    if(gyroOn) recenterGyro();
+    initAudio(); updateModeUI(); updateHUD(); updateTime();
+    return;
+  }
   if(MAP>0){
     // 테마 맵: 기존 배경 끄고 맵 월드 생성. 볼은 '구멍 메우기'의 파란 볼 사용
     outdoorGroup.visible=false; skyDome.visible=false; roomGroup.visible=false;
     buildMapWorld(MAP);
+    blueCore.material.color.setHex(0x3f86e0);
     refreshBlue();
     blueBall.visible=true; ballGroup.visible=false; prince.visible=false; holeGroup.visible=false;
     camera.position.set(0, 5.4, -7.4);
@@ -1815,7 +1957,7 @@ function beginRound(mode){
 }
 function finish(win, reason){
   ended=true; running=false; endStick();
-  EMIT({ type:'over', win:!!win, mode:MODE, size:fmtSizePlain(ball.r), sizeCm:Math.round(ball.r*100),
+  EMIT({ type:'over', win:!!win, mode: SNOW?'snow':MODE, size:fmtSizePlain(ball.r), sizeCm:Math.round(ball.r*100),
     count: MODE==='room'? (roomTotal-holes.length) : ball.score, roomTotal:roomTotal, reason:reason||'' });
   // Flutter 임베드 시 엔드카드는 Flutter가 표시 → 인게임 DOM 엔드카드는 생략(효과음만)
   if(window.__HOLE_EMBEDDED){ win? SFX.win() : SFX.lose(); return; }
@@ -1844,9 +1986,10 @@ function showMenu(){
   document.getElementById('end').classList.add('hidden');
   document.getElementById('start').classList.remove('hidden');
 }
-function curRound(){ return MAP>0 ? ('map'+MAP) : MODE; }
+function curRound(){ return SNOW ? 'snow' : MAP>0 ? ('map'+MAP) : MODE; }
 document.getElementById('modeRoll').addEventListener('click', ()=> beginRound('roll'));
 document.getElementById('modeHole').addEventListener('click', ()=> beginRound('hole'));
+document.getElementById('modeSnow').addEventListener('click', ()=> beginRound('snow'));
 document.getElementById('mapBtn1').addEventListener('click', ()=> beginRound('map1'));
 document.getElementById('mapBtn2').addEventListener('click', ()=> beginRound('map2'));
 document.getElementById('mapBtn3').addEventListener('click', ()=> beginRound('map3'));
@@ -1902,7 +2045,7 @@ requestAnimationFrame(loop);
   try { EMBEDDED = (window.parent && window.parent !== window); } catch(e){ EMBEDDED = true; }
   window.__HOLE_EMBEDDED = EMBEDDED;
   function post(o){ try{ if(EMBEDDED) window.parent.postMessage(Object.assign({hole:true},o), '*'); }catch(e){} }
-  var MODEMAP = { roll:'modeRoll', hole:'modeHole', room:'modeRoom' };
+  var MODEMAP = { roll:'modeRoll', hole:'modeHole', room:'modeRoom', snow:'modeSnow' };
   function startMode(mode){
     // 맵 모드(map1/2/3)는 엔진을 직접 호출
     if(/^map[1-6]$/.test(mode)){

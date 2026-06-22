@@ -41,6 +41,7 @@ const kMaps = <GameMode>[
   GameMode('map6', '⚰️', '맵 6 · 저승 공동묘지', '묘비·도깨비불, 해골·유령·저승사자', Color(0xFF7A4FB0)),
 ];
 const kEventModes = <GameMode>[
+  GameMode('snow', '⛄', '눈사람 만들기', '눈덩이를 굴려 키워 눈사람 완성!', Color(0xFF4FB0E0)),
   GameMode('roll', '🟢', '공 굴리기', '끈끈한 공에 물건을 붙여 키운다', Color(0xFF7BBF3A)),
   GameMode('hole', '⚫', '구멍 빨아들이기', '구멍으로 물건을 쏙쏙 삼킨다', Color(0xFF3A3550)),
 ];
