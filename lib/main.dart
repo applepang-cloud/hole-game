@@ -18,6 +18,8 @@ external void _holeToggle(JSString what);
 external void _holePause();
 @JS('holeResume')
 external void _holeResume();
+@JS('holeMenuMusic')
+external void _holeMenuMusic(JSBoolean on);
 @JS('holeGetCleared')
 external JSString _holeGetCleared();
 @JS('holeSetCleared')
@@ -350,6 +352,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 홈 메뉴 + 스토리 대사 등 비게임 화면에선 main 음악, 실제 게임 중엔 정지
+    final menuMusic = _dialogue != null || !_playing;
+    _holeMenuMusic(menuMusic.toJS);
     final Widget content;
     if (_dialogue != null) {
       content = _DialogueOverlay(

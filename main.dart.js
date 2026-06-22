@@ -63665,14 +63665,16 @@ YB(){v.G.holePause()
 this.a9(new A.a54(this))},
 Zq(){v.G.holeResume()
 this.a9(new A.a58(this))},
-R(a){var s,r,q=this,p=null,o=q.ch
-if(o!=null){s=q.cy
-r=new A.wG(o,q.gUe(),q.cx,new A.ce("dlg"+s,t.kK))}else{o=q.f
-if(o!=null)r=new A.fI(A.cX(p,A.Ew(new A.HM(o,q.gDf(),q.gHz(),p),!0),B.r,p,B.bz,B.dR,p,p,p,p),B.R5)
-else if(q.e)r=new A.In(q.r,q.w,q.x,q.y,q.z,q.Q,new A.a5f(),new A.a5g(),q.gYA(),q.gZp(),q.gDf(),q.gHz(),B.R8)
-else{o=q.as
-if(o==="story")r=new A.fI(A.cX(p,A.Ew(new A.Ll(q.ax,q.ay,q.gYW(),new A.a5h(q),p),!0),B.r,p,B.bz,B.dR,p,p,p,p),B.R9)
-else r=o==="event"?new A.fI(A.cX(p,A.Ew(new A.HP(q.gYU(),new A.a5i(q),p),!0),B.r,p,B.bz,B.dR,p,p,p,p),B.R6):new A.fI(A.cX(p,A.Ew(new A.Im(new A.a5j(q),new A.a5k(q),p),!0),B.r,p,B.bz,B.dR,p,p,p,p),B.R7)}}return new A.uX(new A.qq(r,B.Ah,p),B.L,p)}}
+R(a){var s,r,q,p=this,o=null,n=p.ch!=null||!p.e
+v.G.holeMenuMusic(n)
+s=p.ch
+if(s!=null){r=p.cy
+q=new A.wG(s,p.gUe(),p.cx,new A.ce("dlg"+r,t.kK))}else{s=p.f
+if(s!=null)q=new A.fI(A.cX(o,A.Ew(new A.HM(s,p.gDf(),p.gHz(),o),!0),B.r,o,B.bz,B.dR,o,o,o,o),B.R5)
+else if(p.e)q=new A.In(p.r,p.w,p.x,p.y,p.z,p.Q,new A.a5f(),new A.a5g(),p.gYA(),p.gZp(),p.gDf(),p.gHz(),B.R8)
+else{s=p.as
+if(s==="story")q=new A.fI(A.cX(o,A.Ew(new A.Ll(p.ax,p.ay,p.gYW(),new A.a5h(p),o),!0),B.r,o,B.bz,B.dR,o,o,o,o),B.R9)
+else q=s==="event"?new A.fI(A.cX(o,A.Ew(new A.HP(p.gYU(),new A.a5i(p),o),!0),B.r,o,B.bz,B.dR,o,o,o,o),B.R6):new A.fI(A.cX(o,A.Ew(new A.Im(new A.a5j(p),new A.a5k(p),o),!0),B.r,o,B.bz,B.dR,o,o,o,o),B.R7)}}return new A.uX(new A.qq(q,B.Ah,o),B.L,o)}}
 A.a5l.prototype={
 $1(a){this.a.Y3(a)},
 $S:59}
