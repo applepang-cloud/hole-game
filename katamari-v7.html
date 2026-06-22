@@ -964,7 +964,7 @@ function squash(grp,x,z,size,growK){
   splats.push({ grp, t:0, dur:0.30 });
   // 일반 물체 깔아뭉개기 → 크기 조금만 증가
   ball.vol += Math.pow(size,3)*ABSORB*(growK==null?0.35:growK);
-  ball.score++; refreshActive(); SFX.pop(ball.score); updateHUD();
+  ball.score++; refreshActive(); SFX.squash(); updateHUD();
 }
 /* 맵: 작은 물건은 파란 볼 밑으로 빨려들어 사라지며 성장(붙지 않음) */
 function mapSwallow(item){
@@ -1352,6 +1352,7 @@ function updateBombs(dt){
     if(b.mk){ b.mk.material.opacity = 0.4+0.4*Math.abs(Math.sin(performance.now()*0.012)); }
     if(b.y<=0.2){
       for(let k=0;k<6;k++) spawnPuff(b.tx+rand(-1,1), b.tz+rand(-1,1));
+      SFX.boom();
       const d=Math.hypot(ball.x-b.tx, ball.z-b.tz);
       if(d < 2.4) damage(20, b.tx, b.tz);   // 폭발 반경
       scene.remove(b.grp); scene.remove(b.mk); bombs.splice(i,1);
@@ -1465,6 +1466,7 @@ function spawnSnowEnemy(kind,x,z,fromHole){
 }
 function snowEnemyDmg(kind){ return kind==='bear'?14 : kind==='sailor'?7 : 5; }
 function throwSnow(m){
+  SFX.whoosh();
   const proj=buildSnowProjectile(); proj.position.set(m.x,0.6,m.z); scene.add(proj);
   projectiles.push({ grp:proj, x0:m.x, z0:m.z, tx:ball.x, tz:ball.z, t:0, dur:Math.max(0.5,Math.min(1.4,Math.hypot(ball.x-m.x,ball.z-m.z)/9)) });
 }
@@ -1918,7 +1920,7 @@ function initAudio(){
   try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
   sfxGain=actx.createGain(); sfxGain.gain.value=0.32; sfxGain.connect(actx.destination);
   musGain=actx.createGain(); musGain.gain.value=0.32; musGain.connect(actx.destination);
-  startMusic();
+  startMusic(); initAmbient();
 }
 function tone(freq,dur,type,gain,slide){
   if(!actx||!soundOn) return; const t=actx.currentTime;
@@ -1927,6 +1929,17 @@ function tone(freq,dur,type,gain,slide){
   if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(1,slide),t+dur);
   g.gain.setValueAtTime(gain||0.2,t); g.gain.exponentialRampToValueAtTime(0.001,t+dur);
   o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+dur+0.02);
+}
+// 노이즈 버퍼(바람·폭발·휙 등)
+let NOISE_BUF=null;
+function makeNoise(){ const b=actx.createBuffer(1, (actx.sampleRate*2)|0, actx.sampleRate); const d=b.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1; return b; }
+function noiseBurst(dur,type,freq,gain,slideTo,bus){ if(!actx||!soundOn) return; const t=actx.currentTime;
+  if(!NOISE_BUF) NOISE_BUF=makeNoise();
+  const src=actx.createBufferSource(); src.buffer=NOISE_BUF;
+  const f=actx.createBiquadFilter(); f.type=type||'bandpass'; f.frequency.setValueAtTime(freq,t);
+  if(slideTo) f.frequency.exponentialRampToValueAtTime(Math.max(20,slideTo),t+dur);
+  const g=actx.createGain(); g.gain.setValueAtTime(gain||0.2,t); g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  src.connect(f); f.connect(g); g.connect(bus||sfxGain); src.start(t); src.stop(t+dur+0.05);
 }
 const SFX={
   pop(n){ const base=420+Math.min(40,n)*14; tone(base,0.08,'triangle',0.18,base*1.5);
@@ -1937,6 +1950,9 @@ const SFX={
   loot(){ tone(880,0.06,'triangle',0.16); setTimeout(()=>tone(1245,0.10,'triangle',0.16),60); },
   scream(){ const b=300+Math.random()*140; tone(b,0.2,'sawtooth',0.22,b*0.32); tone(b*1.9,0.12,'square',0.09,b*0.5); }, // 으악!
   hurt(){ tone(200,0.14,'square',0.2,90); tone(150,0.1,'sawtooth',0.12,70); }, // 윽! (주인공 피격)
+  boom(){ noiseBurst(0.5,'lowpass',420,0.5,120); tone(90,0.4,'sine',0.3,38); }, // 폭발(공중 폭격)
+  whoosh(){ noiseBurst(0.22,'highpass',500,0.16,2200); }, // 휙(눈 던지기)
+  squash(){ tone(150,0.12,'square',0.18,60); noiseBurst(0.14,'lowpass',300,0.18); }, // 퍽(납작)
 };
 const MEL=[0,4,7,4, 9,7,4,0, 5,9,5,2, 7,4,7,11];
 const BASS=[0,0,5,5, 7,7,2,2];
@@ -1952,6 +1968,48 @@ function startMusic(){ if(musTimer) clearInterval(musTimer);
     if(musStep%2===0) mnote(nf(BASS[(Math.floor(musStep/2))%BASS.length]-12),'sine',0.4,0.2);
     musStep++;
   }, 200); }
+
+/* ===================== 환경 자연음(바람 + 맵별 앰비언스) ===================== */
+let ambGain=null, windGain=null, windFilter=null, windSrc=null, ambTimer=null, ambTheme='';
+function initAmbient(){
+  if(ambGain) return;
+  ambGain=actx.createGain(); ambGain.gain.value=0.6; ambGain.connect(actx.destination);
+  windFilter=actx.createBiquadFilter(); windFilter.type='lowpass'; windFilter.frequency.value=440;
+  windGain=actx.createGain(); windGain.gain.value=0; windFilter.connect(windGain); windGain.connect(ambGain);
+  if(!NOISE_BUF) NOISE_BUF=makeNoise();
+  windSrc=actx.createBufferSource(); windSrc.buffer=NOISE_BUF; windSrc.loop=true; windSrc.connect(windFilter); windSrc.start();
+  ambTimer=setInterval(ambTick, 1100);
+}
+const WIND_LV={ yard:0.10, city:0.09, grave:0.20, snow:0.28, room:0.03, mart:0.04, school:0.04 };
+function setAmbient(theme){
+  ambTheme=theme||'';
+  if(!actx||!windGain) return;
+  const lv=(soundOn && running)? (WIND_LV[ambTheme]||0) : 0;
+  windGain.gain.setTargetAtTime(lv, actx.currentTime, 0.6);
+  windFilter.frequency.setTargetAtTime(ambTheme==='snow'?620:ambTheme==='grave'?320:440, actx.currentTime, 0.6);
+}
+function gust(boost){ if(!windGain||!actx) return; const t=actx.currentTime, base=WIND_LV[ambTheme]||0.1;
+  windGain.gain.cancelScheduledValues(t); windGain.gain.setValueAtTime(windGain.gain.value,t);
+  windGain.gain.linearRampToValueAtTime(base+(boost||0.18),t+0.5); windGain.gain.linearRampToValueAtTime(base,t+1.9); }
+function chirp(){ const b=1600+Math.random()*700; [0,1,2].forEach(i=>setTimeout(()=>tone(b+i*120,0.05,'sine',0.06),i*70)); }
+function honk(){ tone(180+Math.random()*60,0.22,'square',0.07,150); }
+function chime(){ tone(784,0.25,'sine',0.08); setTimeout(()=>tone(523,0.4,'sine',0.08),180); } // 딩-동
+function beep(){ tone(1320,0.06,'square',0.05); }
+function bell(){ [880,1320,1760].forEach((f,i)=>tone(f,0.5-i*0.1,'sine',0.05/(i+1))); }
+function hoot(){ tone(300,0.22,'sine',0.07,260); setTimeout(()=>tone(300,0.28,'sine',0.07,250),260); } // 부엉
+function drone(){ tone(70,1.4,'sawtooth',0.07,62); tone(105,1.4,'sine',0.04); }
+function tick(){ noiseBurst(0.03,'highpass',2500,0.05); } // 시계 똑
+function ambTick(){ if(!actx||!soundOn||!running) return; if(Math.random()>0.5) return;
+  switch(ambTheme){
+    case 'yard': chirp(); break;
+    case 'city': Math.random()<0.6?honk():gust(0.06); break;
+    case 'mart': Math.random()<0.5?chime():beep(); break;
+    case 'school': Math.random()<0.4?bell():tick(); break;
+    case 'grave': Math.random()<0.5?hoot():drone(); gust(0.12); break;
+    case 'snow': gust(0.16); if(Math.random()<0.3) tick(); break;
+    case 'room': tick(); break;
+  }
+}
 document.getElementById('bSound').addEventListener('click', function(){ soundOn=!soundOn; this.classList.toggle('off',!soundOn); this.textContent=soundOn?'🔊':'🔇'; initAudio(); });
 document.getElementById('bMusic').addEventListener('click', function(){ musicOn=!musicOn; this.classList.toggle('off',!musicOn); initAudio(); });
 
@@ -2157,7 +2215,7 @@ function beginRound(mode){
     document.getElementById('end').classList.add('hidden');
     running=true; ended=false; timeLeft=ROUND_TIME; growMark=START_R;
     if(gyroOn) recenterGyro();
-    initAudio(); updateModeUI(); updateHUD(); updateTime();
+    initAudio(); setAmbient('snow'); updateModeUI(); updateHUD(); updateTime();
     return;
   }
   if(MAP>0){
@@ -2175,7 +2233,7 @@ function beginRound(mode){
     document.getElementById('end').classList.add('hidden');
     running=true; ended=false; timeLeft=ROUND_TIME; growMark=START_R;
     if(gyroOn) recenterGyro();
-    initAudio(); updateModeUI(); updateHUD(); updateTime();
+    initAudio(); setAmbient(['','room','yard','mart','school','city','grave'][MAP]); updateModeUI(); updateHUD(); updateTime();
     return;
   }
   const outdoor = (mode!=='room');
@@ -2201,10 +2259,10 @@ function beginRound(mode){
   document.getElementById('end').classList.add('hidden');
   running=true; ended=false; timeLeft=ROUND_TIME; growMark=START_R;
   if(gyroOn) recenterGyro();
-  initAudio(); updateModeUI(); updateHUD(); updateTime();
+  initAudio(); setAmbient(mode==='room'?'room':'yard'); updateModeUI(); updateHUD(); updateTime();
 }
 function finish(win, reason){
-  ended=true; running=false; endStick();
+  ended=true; running=false; endStick(); setAmbient('');
   EMIT({ type:'over', win:!!win, mode: SNOW?'snow':MODE, size:fmtSizePlain(ball.r), sizeCm:Math.round(ball.r*100),
     count: MODE==='room'? (roomTotal-holes.length) : ball.score, roomTotal:roomTotal, reason:reason||'' });
   // Flutter 임베드 시 엔드카드는 Flutter가 표시 → 인게임 DOM 엔드카드는 생략(효과음만)
