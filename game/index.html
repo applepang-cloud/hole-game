@@ -284,35 +284,30 @@ function initThree(){
   renderer.setClearColor(0xaee5ff, 1);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  // 화질 업: 올바른 색공간(sRGB) + ACES 톤매핑(풍부한 색감·자연스런 하이라이트)
-  if(THREE.sRGBEncoding!==undefined) renderer.outputEncoding = THREE.sRGBEncoding;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.12;
+  // (톤매핑·sRGB 제거 — 기존의 깔끔한 색감으로 복귀)
 
   scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0xbfeaff, 80, 170);
+  scene.fog = new THREE.Fog(0xbfeaff, 70, 160);
 
   camera = new THREE.PerspectiveCamera(52, VIEW.w/VIEW.h, 0.1, 600);
   camera.position.set(0, 5.4, -7.4);
 
-  hemiL = new THREE.HemisphereLight(0xffffff, 0x8fb87a, 0.78);
+  hemiL = new THREE.HemisphereLight(0xffffff, 0x9ec98a, 0.62);
   scene.add(hemiL);
-  ambL = new THREE.AmbientLight(0xffffff, 0.18); scene.add(ambL);
-  sun = new THREE.DirectionalLight(0xfff2d6, 0.95);
+  ambL = new THREE.AmbientLight(0xffffff, 0.0); scene.add(ambL);   // 기본 0(맵별로만 소량)
+  sun = new THREE.DirectionalLight(0xfff2d6, 0.6);
   sun.position.set(18, 34, 14);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048,2048);          // 그림자 해상도 ↑
+  sun.shadow.mapSize.set(1024,1024);
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 90;
-  sun.shadow.camera.left=-24; sun.shadow.camera.right=24;
-  sun.shadow.camera.top=24; sun.shadow.camera.bottom=-24;
-  sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
-  sun.shadow.radius = 3;                        // 부드러운 그림자
+  sun.shadow.camera.left=-20; sun.shadow.camera.right=20;
+  sun.shadow.camera.top=20; sun.shadow.camera.bottom=-20;
+  sun.shadow.bias = -0.0008; sun.shadow.normalBias = 0.04;
   scene.add(sun); scene.add(sun.target);
-  fillL = new THREE.DirectionalLight(0xbfe0ff, 0.22);
+  fillL = new THREE.DirectionalLight(0xbfe0ff, 0.16);
   fillL.position.set(-30, 25, -20);
   scene.add(fillL);
-  // 림 라이트(뒤쪽) — 캐릭터 외곽이 살아남
-  rimL = new THREE.DirectionalLight(0xffffff, 0.25);
+  rimL = new THREE.DirectionalLight(0xffffff, 0.0);   // 기본 끔
   rimL.position.set(-10, 16, -28);
   scene.add(rimL);
   mapLightGroup = new THREE.Group(); scene.add(mapLightGroup);
@@ -1193,20 +1188,21 @@ const MAPS={
   6:{ name:'저승 공동묘지', bound:28, indoor:false, sky:0x2a2740, ground:0x3a4a3f, road:0x2e2a3a },
 };
 /* --- 맵별 조명/분위기 프리셋 --- */
+// 톤다운: 기존 밝기 수준 유지 + 맵별 색감/분위기만. (톤매핑 없음)
 const LIGHTING={
   // pts: [color, intensity, distance, x,y,z, flicker(0~1)]
-  default:{ clear:0xaee5ff, fog:0xbfeaff, fogN:80, fogF:170, exp:1.12, sunC:0xfff2d6, sunI:1.0, sunP:[18,34,14], hemiS:0xffffff, hemiG:0x8fb87a, hemiI:0.78, amb:0.18, fillI:0.22, rimI:0.25, pts:[] },
-  yard:{ clear:0x9fdcff, fog:0xbfeaff, fogN:70, fogF:160, exp:1.14, sunC:0xfff4d2, sunI:1.15, sunP:[16,36,12], hemiS:0xffffff, hemiG:0x7ec05a, hemiI:0.85, amb:0.2, fillI:0.22, rimI:0.25, pts:[] },
-  room:{ clear:0x241c2c, fog:0x2a2230, fogN:16, fogF:55, exp:1.04, sunC:0xffd9a0, sunI:0.4, sunP:[8,24,10], hemiS:0xffe6c0, hemiG:0x5a4a3a, hemiI:0.5, amb:0.26, fillI:0.12, rimI:0.18, pts:[[0xffcf80,1.3,26,2,4.6,0,0.08]] },
-  mart:{ clear:0xdfe7ee, fog:0xe6edf3, fogN:30, fogF:90, exp:1.08, sunC:0xeef4ff, sunI:0.65, sunP:[10,30,8], hemiS:0xffffff, hemiG:0xc8d0d8, hemiI:0.95, amb:0.32, fillI:0.25, rimI:0.2, pts:[[0xeaf4ff,0.7,40,-8,6,-6,0],[0xeaf4ff,0.7,40,8,6,6,0]] },
-  school:{ clear:0xe2e6dd, fog:0xe6ead8, fogN:30, fogF:90, exp:1.1, sunC:0xfff6e0, sunI:0.8, sunP:[12,30,10], hemiS:0xffffff, hemiG:0xc4cbb8, hemiI:0.88, amb:0.28, fillI:0.22, rimI:0.22, pts:[] },
-  city:{ clear:0xc4ccd6, fog:0xc8ced6, fogN:55, fogF:150, exp:1.05, sunC:0xeef0f4, sunI:0.7, sunP:[14,32,10], hemiS:0xcdd6e0, hemiG:0x7a7f86, hemiI:0.72, amb:0.22, fillI:0.2, rimI:0.22, pts:[[0xffcf80,0.9,16,-7,3.2,-4,0.05],[0xffcf80,0.9,16,7,3.2,5,0.05]] },
-  grave:{ clear:0x14121f, fog:0x191626, fogN:18, fogF:58, exp:0.95, sunC:0x9fb0d0, sunI:0.35, sunP:[-10,30,-14], hemiS:0x2a2740, hemiG:0x12160f, hemiI:0.42, amb:0.12, fillI:0.1, rimI:0.3, pts:[[0x7af0d0,1.3,15,-6,1.4,4,0.6],[0x9a7af5,1.1,15,7,1.4,-3,0.6],[0x7af0d0,1.0,14,2,1.2,-8,0.6]] },
-  snow:{ clear:0x0a1430, fog:0x18255a, fogN:50, fogF:150, exp:1.05, sunC:0xcfe0ff, sunI:0.6, sunP:[-12,32,-10], hemiS:0x4a6cff, hemiG:0x9fb8d8, hemiI:0.6, amb:0.2, fillI:0.18, rimI:0.3, pts:[[0x49f5b0,0.7,42,-10,16,-18,0.25],[0x4fd0f5,0.7,42,8,16,-18,0.25]] },
+  default:{ clear:0xaee5ff, fog:0xbfeaff, fogN:70, fogF:160, sunC:0xfff2d6, sunI:0.6, sunP:[18,34,14], hemiS:0xffffff, hemiG:0x9ec98a, hemiI:0.62, amb:0.0, fillI:0.16, rimI:0.0, pts:[] },
+  yard:{ clear:0xaee5ff, fog:0xbfeaff, fogN:70, fogF:160, sunC:0xfff2d6, sunI:0.62, sunP:[18,34,14], hemiS:0xffffff, hemiG:0x86c25e, hemiI:0.62, amb:0.0, fillI:0.16, rimI:0.0, pts:[] },
+  room:{ clear:0x2a2230, fog:0x2a2230, fogN:18, fogF:58, sunC:0xffd9a0, sunI:0.4, sunP:[8,24,10], hemiS:0xffe6c0, hemiG:0x5a4a3a, hemiI:0.45, amb:0.05, fillI:0.1, rimI:0.0, pts:[[0xffcf80,0.9,24,2,4.6,0,0.08]] },
+  mart:{ clear:0xdfe7ee, fog:0xdfe7ee, fogN:34, fogF:100, sunC:0xeef4ff, sunI:0.55, sunP:[10,30,8], hemiS:0xffffff, hemiG:0xc8d0d8, hemiI:0.6, amb:0.04, fillI:0.16, rimI:0.0, pts:[[0xeaf4ff,0.4,40,-8,6,-6,0],[0xeaf4ff,0.4,40,8,6,6,0]] },
+  school:{ clear:0xdfe6dd, fog:0xdfe6dd, fogN:34, fogF:100, sunC:0xfff6e0, sunI:0.6, sunP:[12,30,10], hemiS:0xffffff, hemiG:0xbcc4b0, hemiI:0.6, amb:0.03, fillI:0.16, rimI:0.0, pts:[] },
+  city:{ clear:0xbcc4cf, fog:0xbcc4cf, fogN:55, fogF:150, sunC:0xeef0f4, sunI:0.5, sunP:[14,32,10], hemiS:0xcdd6e0, hemiG:0x7a7f86, hemiI:0.55, amb:0.03, fillI:0.16, rimI:0.0, pts:[[0xffcf80,0.6,16,-7,3.2,-4,0.05],[0xffcf80,0.6,16,7,3.2,5,0.05]] },
+  grave:{ clear:0x14121f, fog:0x191626, fogN:20, fogF:62, sunC:0x9fb0d0, sunI:0.28, sunP:[-10,30,-14], hemiS:0x2a2740, hemiG:0x12160f, hemiI:0.32, amb:0.04, fillI:0.08, rimI:0.12, pts:[[0x7af0d0,1.0,15,-6,1.4,4,0.6],[0x9a7af5,0.9,15,7,1.4,-3,0.6],[0x7af0d0,0.8,14,2,1.2,-8,0.6]] },
+  snow:{ clear:0x0a1430, fog:0x18255a, fogN:55, fogF:155, sunC:0xcfe0ff, sunI:0.45, sunP:[-12,32,-10], hemiS:0x4a6cff, hemiG:0x9fb8d8, hemiI:0.5, amb:0.04, fillI:0.14, rimI:0.12, pts:[[0x49f5b0,0.5,42,-10,16,-18,0.25],[0x4fd0f5,0.5,42,8,16,-18,0.25]] },
 };
 function setMapLighting(theme){
   const L=LIGHTING[theme]||LIGHTING.default;
-  renderer.setClearColor(L.clear,1); renderer.toneMappingExposure=L.exp;
+  renderer.setClearColor(L.clear,1);
   if(scene.fog){ scene.fog.color.setHex(L.fog); scene.fog.near=L.fogN; scene.fog.far=L.fogF; }
   sun.color.setHex(L.sunC); sun.intensity=L.sunI; sunOff=L.sunP.slice();
   hemiL.color.setHex(L.hemiS); hemiL.groundColor.setHex(L.hemiG); hemiL.intensity=L.hemiI;
