@@ -2645,7 +2645,7 @@ function clearWorld(){
   ballGroup.scale.setScalar(1);
 }
 // 맵별 제한시간(+30초): 맵1=90·맵2=120·맵3,4=150·맵5,6=180 / 이벤트=150
-function roundTimeFor(){ if(DUNG) return 150; if(MAP>0) return [0,90,150,180,180,210,210][MAP]; return 180; }
+function roundTimeFor(){ if(DUNG) return 150; if(MAP>0) return [0,90,150,160,180,210,210][MAP]; return 180; }
 function beginRound(mode){
   // 맵 모드(map1~6) → 롤 메커니즘 + 테마 레벨 / snow → 눈사람 만들기 이벤트
   let mapId=0; const mm=/^map([1-6])$/.exec(mode||'');
@@ -2655,6 +2655,7 @@ function beginRound(mode){
   MAP = mapId; MODE = mode;
   clearWorld();
   ball = { x:0, z:0, r:START_R, vol:0, area:Math.PI*START_R*START_R, heading:0, score:0, hp:350, hpMax:350 };
+  if(mapId===3){ ball.hp=400; ball.hpMax=400; }   // 맵3 체력 +50
   camYaw = 0; countdown = 3.0; _cdShown = -1;   // 시작 3-2-1 카운트다운
   ballGroup.quaternion.identity();
   MAP_BOUND = (MAP>0) ? MAPS[MAP].bound-1 : GROUND-2;
