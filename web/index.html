@@ -89,7 +89,7 @@
         on = !!on;
         if(on===menuOn && menuMus) return;
         menuOn = on;
-        if(!menuMus){ menuMus=new Audio('main.mp3'); menuMus.loop=true; menuMus.volume=0.4; }
+        if(!menuMus){ menuMus=new Audio('main.mp3'); menuMus.loop=true; menuMus.volume=0.2; }
         if(on){ var p=menuMus.play(); if(p&&p.catch) p.catch(function(){}); }
         else { menuMus.pause(); }
       };
