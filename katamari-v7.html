@@ -558,10 +558,6 @@ function buildBlueBall(){
   blueCore = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 2),
     new THREE.MeshPhongMaterial({ color:0x3f86e0, flatShading:true, shininess:48, specular:0x9fd0ff }));
   blueCore.castShadow = true; blueBall.add(blueCore);
-  // 하이라이트 점(회전 가시화)
-  const dot=new THREE.Mesh(new THREE.SphereGeometry(0.34,8,6),
-    new THREE.MeshPhongMaterial({color:0x9fd0ff, flatShading:true}));
-  dot.position.set(0.55,0.45,0.55); blueBall.add(dot);
   blueBall.visible=false; scene.add(blueBall);
 }
 function buildHoleMesh(r){
@@ -588,7 +584,6 @@ function setHoleColor(grp, danger){
 function refreshBlue(){
   ball.r = START_R * Math.cbrt(1 + ball.vol);
   blueCore.scale.setScalar(ball.r);
-  blueBall.children[1].position.set(0.55*ball.r,0.45*ball.r,0.55*ball.r);
   blueBall.position.set(ball.x, ball.r, ball.z);
 }
 function populateRoom(){
@@ -1033,7 +1028,7 @@ function spawnMonster(kind,x,z,fromHole){
   monsters.push(m); return m;
 }
 const AGGRO=6;   // 이 거리 안이면 플레이어를 향해 다가옴(멀리선 안 옴)
-function monDmg(kind){ return kind==='reaper'?14: kind==='zombie'?10: kind==='goblin'?9: kind==='cat'?7: kind==='person'?5:6; }
+function monDmg(kind){ return Math.round((kind==='reaper'?14: kind==='zombie'?10: kind==='goblin'?9: kind==='cat'?7: kind==='person'?5:6)*0.7); }   // 공격 30%↓
 function updateMonsters(dt){
   const bound=MAP_BOUND-0.5;
   for(let i=monsters.length-1;i>=0;i--){ const m=monsters[i];
@@ -1050,9 +1045,13 @@ function updateMonsters(dt){
       continue;
     }
     const toB=Math.hypot(ball.x-m.x, ball.z-m.z);
-    if(toB<AGGRO){ // 추격
+    if(toB<AGGRO){ // 반경 안 → 추격
+      m.chasing=true;
       m.dir = Math.atan2(ball.x-m.x, ball.z-m.z) + (Math.random()-0.5)*0.4;
-    } else { m.dir += (Math.random()-0.5)*m.turn*dt; }
+    } else { // 멀어지면 추격 포기(직전 추격 방향 버리고 배회)
+      if(m.chasing){ m.chasing=false; m.dir=Math.random()*Math.PI*2; }
+      m.dir += (Math.random()-0.5)*m.turn*dt;
+    }
     const sp = m.speed*(toB<AGGRO?1.35:1);
     let nx=m.x+Math.sin(m.dir)*sp*dt, nz=m.z+Math.cos(m.dir)*sp*dt;
     if(nx<-bound||nx>bound){ m.dir=-m.dir; nx=clamp(nx,-bound,bound); }
@@ -1629,7 +1628,7 @@ function spawnSnowEnemy(kind,x,z,fromHole){
   snowMovers.push({ grp:g, x, z, size, kind, dir:Math.random()*6.28, speed:rand(1.0,2.2), bob:Math.random()*6.28,
     climb:fromHole?1:0, meleeCd:rand(0.5,1.5), throwCd:rand(2,5), ranged:(kind==='penguin'||kind==='sailor') });
 }
-function snowEnemyDmg(kind){ return kind==='bear'?14 : kind==='sailor'?7 : 5; }
+function snowEnemyDmg(kind){ return Math.round((kind==='bear'?14 : kind==='sailor'?7 : 5)*0.7); }   // 공격 30%↓
 function throwSnow(m){
   SFX.whoosh();
   const proj=buildSnowProjectile(); proj.position.set(m.x,0.6,m.z); scene.add(proj);
