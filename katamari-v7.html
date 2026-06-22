@@ -266,7 +266,7 @@ const MAX_STUCK = 230;        // 표시 유지 최대 부착물
 
 let MODE = 'roll';            // 'roll' | 'hole'
 let DUNG = 0;                 // 쇠똥구리: 0=아님 1=마을(산) 2=도시
-const goalR = ()=> DUNG ? (DUNG===2 ? 3.4 : 3.0) : GOAL[MODE];
+const goalR = ()=> DUNG ? (DUNG===2 ? 2.6 : 2.2) : GOAL[MODE];
 
 const stageEl = document.getElementById('stage');
 const cv = document.getElementById('g');
@@ -1871,10 +1871,12 @@ function buildDungWorld(variant){
   }
 }
 function populateDung(variant){
-  const R=GROUND-8;
-  const P=()=>{ const a=Math.random()*6.28, d=2.2+Math.random()*R; return [Math.cos(a)*d, Math.sin(a)*d]; };
-  // 소똥 덩어리 — 주 수집물(많이)
-  for(let i=0;i<140;i++){ const p=P(); addProp(buildDungPile(), p[0], p[1], rand(0.7,2.2)); }
+  const R=(MAP_BOUND||26)-2;
+  const P=()=>{ const a=Math.random()*6.28, d=1.0+Math.random()*R; return [Math.cos(a)*d, Math.sin(a)*d]; };
+  // 초반용 아주 작은 소똥(작은 시작 볼이 바로 주워 성장) — 중앙 밀집
+  for(let i=0;i<60;i++){ const a=Math.random()*6.28, d=0.8+Math.random()*8; addProp(buildDungPile(), Math.cos(a)*d, Math.sin(a)*d, rand(0.22,0.4)); }
+  // 소똥 덩어리 — 주 수집물(많이·크기 다양)
+  for(let i=0;i<160;i++){ const p=P(); addProp(buildDungPile(), p[0], p[1], rand(0.4,1.8)); }
   if(variant===2){
     // 도시: 빌딩·차·우편함·가로등·신문가판대
     for(let i=0;i<26;i++){ const p=P(); addFlat(buildBuilding(), p[0], p[1], rand(0.6,1.4)); }
@@ -2569,6 +2571,7 @@ function beginRound(mode){
   camYaw = 0; countdown = 3.0; _cdShown = -1;   // 시작 3-2-1 카운트다운
   ballGroup.quaternion.identity();
   MAP_BOUND = (MAP>0) ? MAPS[MAP].bound-1 : GROUND-2;
+  if(DUNG) MAP_BOUND = 26;   // 쇠똥구리: 넓은 들판 대신 알맞은 크기 필드
   if(SNOW){
     outdoorGroup.visible=false; skyDome.visible=false; roomGroup.visible=false;
     MAP_BOUND = 21;
@@ -2724,11 +2727,8 @@ requestAnimationFrame(loop);
   function post(o){ try{ if(EMBEDDED) window.parent.postMessage(Object.assign({hole:true},o), '*'); }catch(e){} }
   var MODEMAP = { roll:'modeRoll', hole:'modeHole', room:'modeRoom', snow:'modeSnow' };
   function startMode(mode){
-    // 맵 모드(map1/2/3)는 엔진을 직접 호출
-    if(/^map[1-6]$/.test(mode)){
-      if(window.__holeEngine && window.__holeEngine.start){ window.__holeEngine.start(mode); post({type:'start', mode:mode}); }
-      return;
-    }
+    // 모든 모드(map1~6·dung·dungcity·snow·roll·hole·room)는 엔진이 직접 처리
+    if(window.__holeEngine && window.__holeEngine.start){ window.__holeEngine.start(mode); post({type:'start', mode:mode}); return; }
     var btn = document.getElementById(MODEMAP[mode] || 'modeRoll');
     if(btn){ btn.click(); post({type:'start', mode:mode}); }
   }
@@ -2755,7 +2755,7 @@ requestAnimationFrame(loop);
   // ?mode= 자동 시작
   try{
     var m = new URLSearchParams(location.search).get('mode');
-    if(m && (MODEMAP[m] || /^map[1-6]$/.test(m))) startMode(m);
+    if(m && (MODEMAP[m] || /^map[1-6]$/.test(m) || m==='dung' || m==='dungcity')) startMode(m);
   }catch(e){}
 
   // Flutter → 게임 명령 수신 (엔드카드 "다시 하기" / 모드 전환)
