@@ -1078,13 +1078,15 @@ function fallInRoll(s){
 function updateSpawners(dt){
   for(let i=spawners.length-1;i>=0;i--){ const s=spawners[i];
     const d=Math.hypot(s.x-ball.x,s.z-ball.z);
-    const canFill = ball.r >= s.r*0.92;
+    const canFill = ball.r >= s.r*0.8;
     setHoleColor(s.grp, !canFill);   // 메울 수 있으면 보라, 빠지는 구멍이면 검정
     if(canFill){
       // 내가 더 크다 → 덮어서 메움 (크게 성장!)
       if(d < ball.r*0.85){
         spawnPuff(s.x,s.z); spawnPuff(s.x,s.z); scene.remove(s.grp); spawners.splice(i,1);
-        ball.vol += (0.8 + s.r*s.r*s.r)*1.75; ball.score++; refreshActive(); SFX.loot(); updateHUD();   // 구멍 메우기 성장 50%↓
+        // 구멍 크기별 성장: 작은 구멍은 아주 조금(현재의 ~25%), 큰 구멍은 좀 더(현재의 50%)
+        const gmul = clamp(0.25 + (s.r-0.9)/0.4*0.25, 0.25, 0.5);
+        ball.vol += (0.8 + s.r*s.r*s.r)*1.75*gmul; ball.score++; refreshActive(); SFX.loot(); updateHUD();
         if(MAP>0 && spawners.length===0 && !ended) finish(true);   // 맵: 모든 구멍 제거 → 클리어(눈사람 모드는 제외)
         continue;
       }
@@ -1380,6 +1382,8 @@ function populateMap(id){
     for(let i=0;i<3;i++){ const p=Pc(4); addCurseZone(p[0],p[1],rand(2.5,3.8)); }
     addPortal(rand(-H*0.7,-H*0.3), rand(-H*0.5,H*0.5), rand(H*0.3,H*0.7), rand(-H*0.5,H*0.5));
   }
+  // 모든 맵 공통: 작은→큰 성장 사다리가 끊기지 않도록 중간 구멍 보장
+  for(let i=0;i<3;i++){ const p=Pc(2); addSpawner(p[0],p[1], rand(0.85,1.15), null, 0); }
 }
 /* --- 체력 데미지 --- */
 function damage(amt, x, z){
@@ -1683,6 +1687,7 @@ function populateSnow(){
   // 메우기/빠지기 구멍 — 작은(파란) 메우기 + 큰(검정) 빠지기, 크기 다양
   const Ps=()=>{ let x,z,t=0; do{ x=rand(-H,H); z=rand(-H,H); t++; }while(Math.hypot(x,z)<2 && t<24); return [x,z]; };
   for(let i=0;i<9;i++){ const p=Ps(); addSpawner(p[0],p[1], rand(0.35,0.8), null, 0); }       // 작은 메우기 구멍(많이)
+  for(let i=0;i<3;i++){ const p=Ps(); addSpawner(p[0],p[1], rand(0.9,1.2), null, 0); }         // 중간 구멍(성장 사다리)
   for(let i=0;i<4;i++){ const p=Ps(); addSpawner(p[0],p[1], rand(1.3,1.9), null, 0); }         // 큰 빠지는 구멍(옆에서 빠질 수 있음)
   for(let i=0;i<4;i++)  spawnSnowEnemy('penguin', rand(-H,H), rand(-H,H), false);
   for(let i=0;i<2;i++)  spawnSnowEnemy('bear', rand(-H,H), rand(-H,H), false);               // 남극곰
@@ -1690,7 +1695,7 @@ function populateSnow(){
   const bx=rand(-H*0.4,H*0.4), bz=H*0.55;
   snowBase=buildSnowBaseBody(); snowBase.position.set(bx,0,bz); scene.add(snowBase);
   snowBase.userData.x=bx; snowBase.userData.z=bz; snowBase.userData.r=1.4;
-  snowTarget=1.2;
+  snowTarget=1.05;
 }
 // 빙판길 미끄럼: 속도(관성) 기반 이동
 function updateBallSnow(dt){
