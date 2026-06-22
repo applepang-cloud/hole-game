@@ -827,6 +827,9 @@ let chopper=null, chopperT=0, attackTimer=0, bombs=[], hurtT=0;
 const MONSTER_CAP=34, FLATTEN_RATIO=0.8, AIR_ATTACK_EVERY=30;   // 공중 공격 주기(초)
 let SNOW=false, snowBase=null, snowMovers=[], snowTarget=1.2, snowAssemble=null;   // 눈사람 만들기 이벤트
 let mapWalls=[];   // 실내 맵 벽(카메라가 밖이면 투명 페이드)
+// 맵별 장치: 컨베이어·부스터·달리는차·저주구역·순간이동
+let conveyors=[], boostPads=[], traffic=[], curseZones=[], portals=[];
+let boostT=0, boostVec={x:0,z:0}, ballSlow=1, portalCd=0;
 let icePatches=[], iceHoles=[], projectiles=[], santa=null, santaT=0, snowVel={x:0,z:0};   // 남극 테마
 
 /* --- 몬스터/사람 빌더 (size=충돌 반지름) --- */
@@ -1297,6 +1300,7 @@ function populateMap(id){
     flat(buildChair,4,0,0.8,1.3); prop(buildApple,8,0.8,2.0); prop(buildOrange,8,0.8,2.0); prop(buildMug,6,0.8,1.8);
     for(let i=0;i<5;i++) addSpawner(P(),P(),rand(0.4,0.6),null,0);
     for(let i=0;i<6;i++){ const p=Pc(2.5); addSpawner(p[0],p[1],rand(1.0,1.6),'zombie',rand(2.5,4)); }
+    for(let i=0;i<3;i++){ const p=Pc(3); addConveyor(p[0],p[1],rand(5,8),3.2,Math.random()*Math.PI*2); }   // 🛒 컨베이어 벨트
   } else if(id===4){
     flat(buildDesk,8,1.5,0.8,1.4); flat(buildChair,8,1,0.8,1.4); flat(buildLocker,7,2,0.85,1.3);
     flat(buildBlackboard,2,3,0.9,1.2); flat(buildBookStack,10,0,0.7,1.8);
@@ -1305,6 +1309,7 @@ function populateMap(id){
     for(let i=0;i<4;i++) spawnMonster('skeleton',P(),P(),false);
     for(let i=0;i<4;i++) addSpawner(P(),P(),rand(0.4,0.6),null,0);
     for(let i=0;i<6;i++){ const p=Pc(2.5); addSpawner(p[0],p[1],rand(0.9,1.5),i%2?'skeleton':'goblin',rand(2.8,4.2)); }
+    for(let i=0;i<4;i++){ const p=Pc(3); addBoostPad(p[0],p[1],Math.random()*Math.PI*2); }   // 🏫 부스터 발판
   } else if(id===5){
     flat(buildBuilding,8,3,0.8,1.5); flat(buildCar,6,1.5,0.85,1.3); flat(buildBus,3,2.5,0.9,1.2);
     flat(buildTrafficLight,5,0,0.8,1.3); flat(buildBench,6,0,0.8,1.4); flat(buildLamp,6,0,0.8,1.3);
@@ -1313,6 +1318,8 @@ function populateMap(id){
     for(let i=0;i<7;i++) spawnMonster('person',P(),P(),false);
     for(let i=0;i<4;i++) addSpawner(P(),P(),rand(0.4,0.6),null,0);
     for(let i=0;i<7;i++){ const p=Pc(2.5); addSpawner(p[0],p[1],rand(1.0,1.6),i%2?'goblin':'ghost',rand(2.6,4)); }
+    // 🏙️ 달리는 자동차(도로 따라 — 십자 양방향)
+    for(const a of [0,Math.PI,Math.PI/2,-Math.PI/2,0,Math.PI/2]) addTrafficCar(a);
   } else {
     flat(buildGravestone,14,1,0.8,1.6); flat(buildDeadTree,8,1.5,0.8,1.5); flat(buildTorch,10,0,0.8,1.4);
     flat(buildBench,3,0,0.8,1.3);
@@ -1321,6 +1328,9 @@ function populateMap(id){
     for(let i=0;i<3;i++) spawnMonster('reaper',P(),P(),false);
     for(let i=0;i<4;i++) addSpawner(P(),P(),rand(0.4,0.6),null,0);
     for(let i=0;i<7;i++){ const p=Pc(2.5); const k=['skeleton','ghost','reaper'][i%3]; addSpawner(p[0],p[1],rand(1.0,1.7),k,rand(2.4,3.8)); }
+    // ⚰️ 저주 안개 구역(체력↓·둔화) + 순간이동 포털
+    for(let i=0;i<3;i++){ const p=Pc(4); addCurseZone(p[0],p[1],rand(2.5,3.8)); }
+    addPortal(rand(-H*0.7,-H*0.3), rand(-H*0.5,H*0.5), rand(H*0.3,H*0.7), rand(-H*0.5,H*0.5));
   }
 }
 /* --- 체력 데미지 --- */
@@ -1390,10 +1400,64 @@ function updateBombs(dt){
   }
 }
 
+/* --- 맵별 장치(컨베이어·부스터·차·저주·포털) --- */
+function addConveyor(x,z,w,d,ang){
+  const belt=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshPhongMaterial({color:0x2c3038,shininess:10})); belt.rotation.x=-Math.PI/2; belt.position.set(x,0.03,z); belt.rotation.z=-ang; mapGroup.add(belt);
+  const arrows=[];
+  for(let i=0;i<5;i++){ const ar=new THREE.Mesh(new THREE.ConeGeometry(Math.min(w,d)*0.18,0.5,3),new THREE.MeshBasicMaterial({color:0xf5c84a})); ar.rotation.x=-Math.PI/2; mapGroup.add(ar); arrows.push(ar); }
+  conveyors.push({ x,z,w,d,ang, force:rand(3.5,5.5), arrows, t:0 });
+}
+function addBoostPad(x,z,ang){
+  const r=0.9;
+  const pad=new THREE.Mesh(new THREE.CircleGeometry(r,24),new THREE.MeshPhongMaterial({color:0x1f8f5a,emissive:0x1f8f5a,emissiveIntensity:0.5})); pad.rotation.x=-Math.PI/2; pad.position.set(x,0.03,z); mapGroup.add(pad);
+  const ring=new THREE.Mesh(new THREE.RingGeometry(r*0.7,r,24),new THREE.MeshBasicMaterial({color:0x9affd0,side:THREE.DoubleSide})); ring.rotation.x=-Math.PI/2; ring.position.set(x,0.04,z); mapGroup.add(ring);
+  const ar=new THREE.Mesh(new THREE.ConeGeometry(0.28,0.6,3),new THREE.MeshBasicMaterial({color:0xffffff})); ar.rotation.x=-Math.PI/2; ar.rotation.z=-ang; ar.position.set(x,0.05,z); mapGroup.add(ar);
+  boostPads.push({ x,z,ang, r, power:rand(11,15) });
+}
+function addCurseZone(x,z,r){
+  const disc=new THREE.Mesh(new THREE.CircleGeometry(r,28),new THREE.MeshBasicMaterial({color:0x6a36a8,transparent:true,opacity:0.4,side:THREE.DoubleSide})); disc.rotation.x=-Math.PI/2; disc.position.set(x,0.04,z); mapGroup.add(disc);
+  const ring=new THREE.Mesh(new THREE.RingGeometry(r*0.85,r,28),new THREE.MeshBasicMaterial({color:0xb06ce0,transparent:true,opacity:0.7,side:THREE.DoubleSide})); ring.rotation.x=-Math.PI/2; ring.position.set(x,0.05,z); mapGroup.add(ring);
+  curseZones.push({ x,z,r, disc, cd:0, t:Math.random()*6.28 });
+}
+function addPortal(ax,az,bx,bz){
+  function ring(x,z,c){ const t=new THREE.Mesh(new THREE.TorusGeometry(0.7,0.12,10,24),new THREE.MeshPhongMaterial({color:c,emissive:c,emissiveIntensity:0.8})); t.position.set(x,0.7,z); t.rotation.x=Math.PI/2; mapGroup.add(t); return t; }
+  const ma=ring(ax,az,0x4fd0f5), mb=ring(bx,bz,0xff7ad0);
+  portals.push({ ax,az,bx,bz, r:0.8, ma, mb });
+}
+function addTrafficCar(ang){
+  const grp=buildCar(); const lim=MAP_BOUND+5;
+  const car={ grp, ang, speed:rand(5,8), size:1.3, cd:0, x:-Math.sin(ang)*lim, z:-Math.cos(ang)*lim };
+  grp.position.set(car.x,0,car.z); scene.add(grp); traffic.push(car);
+}
+function updateDevices(dt){
+  ballSlow=1;
+  for(const c of conveyors){ c.t+=dt;
+    if(Math.abs(ball.x-c.x)<c.w/2 && Math.abs(ball.z-c.z)<c.d/2){ ball.x+=Math.sin(c.ang)*c.force*dt; ball.z+=Math.cos(c.ang)*c.force*dt; }
+    c.arrows.forEach((a,i)=>{ const off=((c.t*c.force*0.3 + i/5)%1 - 0.5)*c.d; a.position.set(c.x+Math.sin(c.ang)*off, 0.05, c.z+Math.cos(c.ang)*off); a.rotation.z=-c.ang; });
+  }
+  for(const p of boostPads){ if(Math.hypot(ball.x-p.x,ball.z-p.z)<p.r){ boostT=0.45; boostVec={x:Math.sin(p.ang)*p.power,z:Math.cos(p.ang)*p.power}; SFX.grow(); } }
+  if(boostT>0){ boostT-=dt; ball.x+=boostVec.x*dt; ball.z+=boostVec.z*dt; }
+  for(const z of curseZones){ z.t+=dt; if(z.disc) z.disc.material.opacity=0.3+0.2*Math.abs(Math.sin(z.t*2));
+    if(Math.hypot(ball.x-z.x,ball.z-z.z)<z.r){ ballSlow=0.45; z.cd-=dt; if(z.cd<=0){ z.cd=0.7; damage(4,z.x,z.z); } } }
+  for(const car of traffic){ if(car.cd>0) car.cd-=dt;
+    car.x+=Math.sin(car.ang)*car.speed*dt; car.z+=Math.cos(car.ang)*car.speed*dt;
+    const lim=MAP_BOUND+6; if(Math.abs(car.x)>lim || Math.abs(car.z)>lim){ car.x=-Math.sin(car.ang)*lim; car.z=-Math.cos(car.ang)*lim; }
+    car.grp.position.set(car.x,0,car.z); car.grp.rotation.y=car.ang;
+    if(car.cd<=0 && Math.hypot(car.x-ball.x,car.z-ball.z)<ball.r+car.size){ damage(12,car.x,car.z); car.cd=1.3; }
+  }
+  if(portalCd>0) portalCd-=dt;
+  for(const pt of portals){ if(pt.ma){ pt.ma.rotation.z+=dt*2; pt.mb.rotation.z-=dt*2; }
+    if(portalCd<=0){
+      if(Math.hypot(ball.x-pt.ax,ball.z-pt.az)<pt.r){ ball.x=pt.bx; ball.z=pt.bz; portalCd=1.4; spawnPuff(pt.ax,pt.az); spawnPuff(pt.bx,pt.bz); }
+      else if(Math.hypot(ball.x-pt.bx,ball.z-pt.bz)<pt.r){ ball.x=pt.ax; ball.z=pt.az; portalCd=1.4; spawnPuff(pt.ax,pt.az); spawnPuff(pt.bx,pt.bz); }
+    } }
+}
+
 function updateMapExtras(dt){
   updateMonsters(dt);
   if(spawners.length) updateSpawners(dt);
   updateChopper(dt); updateBombs(dt);
+  updateDevices(dt);
   if(hurtT>0) hurtT=Math.max(0,hurtT-dt);
   if(windowGhost){ ambT+=dt; const o=Math.max(0,Math.sin(ambT*0.55))*0.88;
     const M=windowGhost.userData.mats; M[0].opacity=o; M[1].opacity=o; windowGhost.position.x=Math.sin(ambT*0.4)*1.1; }
@@ -1874,7 +1938,7 @@ function updatePuffs(dt){
 function updateBall(dt){
   if(SNOW){ updateBallSnow(dt); return; }
   const inp = inputVector();
-  const speed = (6.2 + ball.r*1.6) * inp.m;
+  const speed = (6.2 + ball.r*1.6) * inp.m * (MAP>0?ballSlow:1);
   if(inp.m>0.01){
     const Fx=Math.sin(camYaw), Fz=Math.cos(camYaw);   // 화면 전방(지면)
     const Rx=Math.cos(camYaw), Rz=-Math.sin(camYaw);  // 화면 오른쪽
@@ -2215,6 +2279,8 @@ function clearWorld(){
   attackTimer=0; chopperT=0; hurtT=0;
   if(snowBase){ scene.remove(snowBase); snowBase=null; }
   for(const m of snowMovers) scene.remove(m.grp); snowMovers=[]; snowAssemble=null;
+  for(const c of traffic) scene.remove(c.grp); traffic=[];
+  conveyors=[]; boostPads=[]; curseZones=[]; portals=[]; boostT=0; ballSlow=1; portalCd=0;
   for(const h of iceHoles) scene.remove(h.grp); iceHoles=[];
   for(const p of projectiles) scene.remove(p.grp); projectiles=[];
   if(santa){ scene.remove(santa); santa=null; } icePatches=[]; snowVel={x:0,z:0};
