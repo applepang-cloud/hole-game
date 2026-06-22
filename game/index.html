@@ -1513,8 +1513,9 @@ function addBoostPad(x,z,ang){
   boostPads.push({ x,z,ang, r, power:rand(11,15) });
 }
 function addCurseZone(x,z,r){
-  const disc=new THREE.Mesh(new THREE.CircleGeometry(r,28),new THREE.MeshBasicMaterial({color:0x6a36a8,transparent:true,opacity:0.4,side:THREE.DoubleSide})); disc.rotation.x=-Math.PI/2; disc.position.set(x,0.04,z); mapGroup.add(disc);
-  const ring=new THREE.Mesh(new THREE.RingGeometry(r*0.85,r,28),new THREE.MeshBasicMaterial({color:0xb06ce0,transparent:true,opacity:0.7,side:THREE.DoubleSide})); ring.rotation.x=-Math.PI/2; ring.position.set(x,0.05,z); mapGroup.add(ring);
+  // 저주 안개 — 독성 노란/황록 톤(흡수 가능한 보라색 구멍과 구분)
+  const disc=new THREE.Mesh(new THREE.CircleGeometry(r,28),new THREE.MeshBasicMaterial({color:0x9aa024,transparent:true,opacity:0.38,side:THREE.DoubleSide})); disc.rotation.x=-Math.PI/2; disc.position.set(x,0.04,z); mapGroup.add(disc);
+  const ring=new THREE.Mesh(new THREE.RingGeometry(r*0.85,r,28),new THREE.MeshBasicMaterial({color:0xe6d23a,transparent:true,opacity:0.75,side:THREE.DoubleSide})); ring.rotation.x=-Math.PI/2; ring.position.set(x,0.05,z); mapGroup.add(ring);
   curseZones.push({ x,z,r, disc, cd:0, t:Math.random()*6.28 });
 }
 function addPortal(ax,az,bx,bz){
