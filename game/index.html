@@ -830,6 +830,9 @@ let mapWalls=[];   // 실내 맵 벽(카메라가 밖이면 투명 페이드)
 // 맵별 장치: 컨베이어·부스터·달리는차·저주구역·순간이동
 let conveyors=[], boostPads=[], traffic=[], curseZones=[], portals=[];
 let boostT=0, boostVec={x:0,z:0}, ballSlow=1, portalCd=0;
+let atkWindow=true, atkPhaseT=3.2;   // 적 공격 페이즈(공격 구간 ↔ 휴식 구간 토글)
+const ATK_ON=3.2, ATK_OFF=2.6;
+function updateAtkPhase(dt){ atkPhaseT-=dt; if(atkPhaseT<=0){ atkWindow=!atkWindow; atkPhaseT=atkWindow?ATK_ON:ATK_OFF; } }
 let icePatches=[], iceHoles=[], projectiles=[], santa=null, santaT=0, snowVel={x:0,z:0};   // 남극 테마
 
 /* --- 몬스터/사람 빌더 (size=충돌 반지름) --- */
@@ -1027,7 +1030,7 @@ function updateMonsters(dt){
     const d=Math.hypot(m.x-ball.x,m.z-ball.z), reach=ball.r+m.size*0.7+0.05;
     if(m.climb<=0){
       if(d<reach && ball.r>=m.size*FLATTEN_RATIO){ monsters.splice(i,1); squash(m.grp,m.x,m.z,m.size,0.5); SFX.scream(); continue; } // 깔아뭉갬 → 으악!
-      if(d<reach+0.6 && m.atkCd<=0){ damage(monDmg(m.kind), m.x, m.z); m.atkCd=1.5; } // 공격
+      if(atkWindow && d<reach+0.6 && m.atkCd<=0){ damage(monDmg(m.kind), m.x, m.z); m.atkCd=1.5; } // 공격(공격 페이즈에만)
     }
   }
 }
@@ -1454,6 +1457,7 @@ function updateDevices(dt){
 }
 
 function updateMapExtras(dt){
+  updateAtkPhase(dt);
   updateMonsters(dt);
   if(spawners.length) updateSpawners(dt);
   updateChopper(dt); updateBombs(dt);
@@ -1628,6 +1632,7 @@ function updateBallSnow(dt){
   blueBall.position.set(ball.x, ball.r, ball.z);
 }
 function updateSnow(dt){
+  updateAtkPhase(dt);
   const bound=MAP_BOUND-0.5;
   for(let i=snowMovers.length-1;i>=0;i--){ const m=snowMovers[i];
     if(m.meleeCd>0) m.meleeCd-=dt; if(m.throwCd>0) m.throwCd-=dt;
@@ -1657,8 +1662,8 @@ function updateSnow(dt){
       falling.push({ grp:m.grp, x0:nx, z0:nz, y0:0.2, t:0, dur:0.4, spin:rand(4,9), tilt:rand(3,7), toY:Math.max(0.3,ball.r*0.5) });
       ball.vol+=Math.pow(m.size,3)*ABSORB*0.5; ball.score++; refreshBlue(); SFX.pop(ball.score); updateHUD(); continue;
     }
-    if(d<reach+0.5 && m.meleeCd<=0){ damage(snowEnemyDmg(m.kind), nx, nz); m.meleeCd=1.6; }       // 근접 공격
-    else if(m.ranged && m.throwCd<=0 && d<12 && d>2){ throwSnow(m); m.throwCd=rand(3,6); }          // 눈 던지기(가끔)
+    if(atkWindow && d<reach+0.5 && m.meleeCd<=0){ damage(snowEnemyDmg(m.kind), nx, nz); m.meleeCd=1.6; }       // 근접 공격(공격 페이즈에만)
+    else if(atkWindow && m.ranged && m.throwCd<=0 && d<12 && d>2){ throwSnow(m); m.throwCd=rand(3,6); }          // 눈 던지기(가끔)
   }
   for(const h of iceHoles){ h.t+=dt; if(h.t>=h.interval){ h.t=0; spawnSnowEnemy('penguin', h.x+rand(-0.5,0.5), h.z+rand(-0.5,0.5), true); } }
   updateProjectiles(dt); updateSanta(dt);
@@ -2281,6 +2286,7 @@ function clearWorld(){
   for(const m of snowMovers) scene.remove(m.grp); snowMovers=[]; snowAssemble=null;
   for(const c of traffic) scene.remove(c.grp); traffic=[];
   conveyors=[]; boostPads=[]; curseZones=[]; portals=[]; boostT=0; ballSlow=1; portalCd=0;
+  atkWindow=true; atkPhaseT=ATK_ON;
   for(const h of iceHoles) scene.remove(h.grp); iceHoles=[];
   for(const p of projectiles) scene.remove(p.grp); projectiles=[];
   if(santa){ scene.remove(santa); santa=null; } icePatches=[]; snowVel={x:0,z:0};
