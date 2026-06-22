@@ -265,7 +265,8 @@ const GOAL = { roll:2.2, hole:2.8 };   // 모드별 목표 반지름
 const MAX_STUCK = 230;        // 표시 유지 최대 부착물
 
 let MODE = 'roll';            // 'roll' | 'hole'
-const goalR = ()=> GOAL[MODE];
+let DUNG = 0;                 // 쇠똥구리: 0=아님 1=마을(산) 2=도시
+const goalR = ()=> DUNG ? (DUNG===2 ? 3.4 : 3.0) : GOAL[MODE];
 
 const stageEl = document.getElementById('stage');
 const cv = document.getElementById('g');
@@ -1810,6 +1811,96 @@ function updateAssemble(dt){
   }
 }
 
+/* ===================== 쇠똥구리(소똥 굴리기) 이벤트 ===================== */
+let sprouts=[], dungScape=null;   // 도망다니는 새싹 캐릭터 / 마을·도시 풍경 그룹
+function buildDungPile(){ const g=new THREE.Group();   // 소똥 덩어리
+  const n=2+((Math.random()*2)|0);
+  for(let i=0;i<n;i++){ const r=rand(0.18,0.34); const lump=new THREE.Mesh(new THREE.IcosahedronGeometry(r,1),SMAT(0x6b4a2a,8,0x201509));
+    lump.position.set(rand(-0.2,0.2), r*0.8, rand(-0.2,0.2)); lump.scale.y=0.8; g.add(lump); }
+  // 윤기 한 방울
+  const top=new THREE.Mesh(new THREE.SphereGeometry(0.1,8,7),SMAT(0x8a6238,30,0x554)); top.position.y=0.5; g.add(top);
+  addShadow(g,0.5); return tag(g,0.46,0); }
+function buildMushroom(){ const g=new THREE.Group();
+  const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.16,0.5,8),MAT(0xf2e9d8)); stem.position.y=0.25; g.add(stem);
+  const cap=new THREE.Mesh(new THREE.SphereGeometry(0.34,12,8,0,Math.PI*2,0,Math.PI/2),MAT(0xd8453a)); cap.position.y=0.5; g.add(cap);
+  for(let i=0;i<4;i++){ const dot=new THREE.Mesh(new THREE.CircleGeometry(0.05,8),MAT(0xffffff)); const a=i/4*6.28; dot.position.set(Math.cos(a)*0.18,0.57,Math.sin(a)*0.18); dot.rotation.x=-Math.PI/2; g.add(dot); }
+  addShadow(g,0.4); return tag(g,0.5,0); }
+function buildGrassTuft(){ const g=new THREE.Group();
+  for(let i=0;i<5;i++){ const bl=new THREE.Mesh(new THREE.ConeGeometry(0.05,rand(0.4,0.8),4),MAT(0x6fae3a)); bl.position.set(rand(-0.18,0.18),0.3,rand(-0.18,0.18)); bl.rotation.z=rand(-0.3,0.3); g.add(bl); }
+  addShadow(g,0.35); return tag(g,0.42,0); }
+// 새싹 캐릭터(피크민 느낌의 자작 디자인) — 도망다님
+function buildSprout(){ const g=new THREE.Group(); const c=[0xff6b6b,0x5ec6ff,0xffd23f,0x8ae26b][(Math.random()*4)|0];
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.18,12,10),SMAT(c,24,0x553)); body.position.y=0.32; body.scale.set(1,1.5,1); g.add(body);
+  for(const sx of[-1,1]){ const eye=new THREE.Mesh(new THREE.SphereGeometry(0.05,8,7),MAT(0xffffff)); eye.position.set(sx*0.07,0.42,0.14); g.add(eye);
+    const pup=new THREE.Mesh(new THREE.SphereGeometry(0.025,6,6),MAT(0x161616)); pup.position.set(sx*0.07,0.42,0.18); g.add(pup); }
+  const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,0.18,5),MAT(0x4f8a2a)); stem.position.y=0.62; g.add(stem);
+  const leaf=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,6),MAT(0x7ad04a)); leaf.position.y=0.72; leaf.scale.set(1,0.5,0.7); g.add(leaf);
+  for(const sx of[-1,1]){ const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.14,5),MAT(0x3a6a1f)); leg.position.set(sx*0.07,0.07,0); g.add(leg); }
+  g.userData.size=0.34; return g; }
+function spawnSprout(x,z){ const g=buildSprout(); g.position.set(x,0,z); g.rotation.y=Math.random()*6.28; scene.add(g);
+  sprouts.push({ grp:g, x, z, size:0.34, dir:Math.random()*6.28, bob:Math.random()*6.28, speed:rand(2.4,3.6) }); }
+function buildBigMountain(){ const g=new THREE.Group();   // 마을 끝 거대한 산(랜드마크)
+  const m=new THREE.Mesh(new THREE.ConeGeometry(16,18,7),SMAT(0x6b7a55,6,0x222)); m.position.y=9; g.add(m);
+  const snow=new THREE.Mesh(new THREE.ConeGeometry(6,6,7),MAT(0xffffff)); snow.position.y=15; g.add(snow);
+  return g; }
+function buildDungWorld(variant){
+  if(dungScape) scene.remove(dungScape); dungScape=new THREE.Group(); scene.add(dungScape);
+  if(variant===2){
+    // 도시: 멀리 마천루 스카이라인(랜드마크)
+    for(let i=0;i<16;i++){ const a=i/16*6.28, d=rand(46,60); const h=rand(8,26);
+      const t=new THREE.Mesh(new THREE.BoxGeometry(rand(4,8),h,rand(4,8)),SMAT([0x9aa6b4,0xb4a890,0x8f98b0][i%3],20,0x445)); t.position.set(Math.cos(a)*d,h/2,Math.sin(a)*d); dungScape.add(t); }
+  } else {
+    const mt=buildBigMountain(); mt.position.set(0,0,-58); dungScape.add(mt);
+    const mt2=buildBigMountain(); mt2.position.set(40,0,-44); mt2.scale.setScalar(0.7); dungScape.add(mt2);
+  }
+}
+function populateDung(variant){
+  const R=GROUND-8;
+  const P=()=>{ const a=Math.random()*6.28, d=2.2+Math.random()*R; return [Math.cos(a)*d, Math.sin(a)*d]; };
+  // 소똥 덩어리 — 주 수집물(많이)
+  for(let i=0;i<140;i++){ const p=P(); addProp(buildDungPile(), p[0], p[1], rand(0.7,2.2)); }
+  if(variant===2){
+    // 도시: 빌딩·차·우편함·가로등·신문가판대
+    for(let i=0;i<26;i++){ const p=P(); addFlat(buildBuilding(), p[0], p[1], rand(0.6,1.4)); }
+    for(let i=0;i<22;i++){ const p=P(); addFlat(buildCar(), p[0], p[1], rand(0.7,1.3)); }
+    for(let i=0;i<8;i++){ const p=P(); addFlat(buildBus(), p[0], p[1], rand(0.7,1.1)); }
+    for(let i=0;i<16;i++){ const p=P(); addFlat(buildLamp(), p[0], p[1], rand(0.8,1.3)); }
+    for(let i=0;i<12;i++){ const p=P(); addFlat(buildMailbox(), p[0], p[1], rand(0.8,1.3)); }
+    for(let i=0;i<60;i++){ const p=P(); addProp(SMALL_MAKERS[(Math.random()*SMALL_MAKERS.length)|0](), p[0], p[1], rand(0.7,1.6)); }
+  } else {
+    // 마을: 버섯·풀·나무·꽃·덤불
+    for(let i=0;i<40;i++){ const p=P(); addProp(buildMushroom(), p[0], p[1], rand(0.7,2.0)); }
+    for(let i=0;i<50;i++){ const p=P(); addProp(buildGrassTuft(), p[0], p[1], rand(0.7,1.8)); }
+    for(let i=0;i<40;i++){ const p=P(); addProp(buildFlower(), p[0], p[1], rand(0.8,1.8)); }
+    for(let i=0;i<22;i++){ const p=P(); addFlat(buildTree(), p[0], p[1], rand(0.7,1.5)); }
+    for(let i=0;i<24;i++){ const p=P(); addFlat(buildBush(), p[0], p[1], rand(0.8,1.4)); }
+  }
+  // 도망다니는 새싹 캐릭터
+  for(let i=0;i<14;i++){ const p=P(); spawnSprout(p[0], p[1]); }
+}
+function updateSprouts(dt){
+  const bound=GROUND-3;
+  for(let i=sprouts.length-1;i>=0;i--){ const m=sprouts[i];
+    const dx=m.x-ball.x, dz=m.z-ball.z, d=Math.hypot(dx,dz);
+    if(d<7){ m.dir=Math.atan2(dx,dz)+(Math.random()-0.5)*0.4; }   // 공에서 도망(반대 방향)
+    else m.dir+=(Math.random()-0.5)*1.5*dt;
+    const spd=m.speed*(d<7?1.25:0.5);
+    let nx=m.x+Math.sin(m.dir)*spd*dt, nz=m.z+Math.cos(m.dir)*spd*dt;
+    if(nx<-bound||nx>bound){ m.dir=-m.dir; nx=clamp(nx,-bound,bound); }
+    if(nz<-bound||nz>bound){ m.dir=Math.PI-m.dir; nz=clamp(nz,-bound,bound); }
+    m.x=nx; m.z=nz; m.bob+=dt*12;
+    m.grp.position.set(nx, Math.abs(Math.sin(m.bob))*0.12, nz); m.grp.rotation.y=m.dir;
+    // 공이 충분히 크면 휘말려 흡수(성장)
+    const reach=ball.r+m.size*0.7+0.1;
+    if(d<reach && ball.r>=m.size*0.9){
+      sprouts.splice(i,1);
+      falling.push({ grp:m.grp, x0:nx, z0:nz, y0:0.2, t:0, dur:0.4, spin:rand(5,10), tilt:rand(3,7), toY:Math.max(0.3,ball.r*0.5) });
+      ball.vol += Math.pow(m.size,3)*ABSORB*0.5; ball.score++; refreshBall(); SFX.pop(ball.score); updateHUD();
+      if(ball.r>=goalR() && !ended) finish(true, DUNG===2?'도시를 통째로 뭉갰다! 🏙️':'산까지 뭉갰다! ⛰️');
+    }
+  }
+}
+
 /* ===================== 입력 (조이스틱 + 키보드) ===================== */
 const stickEl = document.getElementById('stick'), knobEl = document.getElementById('stickKnob');
 let touchActive=false, touchId=null, originX=0, originY=0, moveVec={x:0,y:0};
@@ -1971,7 +2062,7 @@ function collect(item){
   SFX.pop(ball.score);
   spawnPuff(item.x, item.z);
   updateHUD();
-  if(ball.r >= goalR() && !ended) finish(true);
+  if(ball.r >= goalR() && !ended) finish(true, DUNG ? (DUNG===2?'도시를 통째로 뭉갰다! 🏙️':'산까지 뭉갰다! ⛰️') : undefined);
 }
 
 /* ===================== 구멍 흡수/빨림 ===================== */
@@ -2135,6 +2226,7 @@ function initAudio(){
 const MUSIC_BASE = (location.pathname.indexOf('/game/')>=0) ? 'music/' : 'game/music/';
 let bgm=null, bgmFile='';
 function trackFor(){
+  if(DUNG) return 'map5.mp3';                // 이벤트: 쇠똥구리(마을·도시)
   if(MAP>0) return 'map'+MAP+'.mp3';        // 스토리 맵 N → mapN.mp3
   if(SNOW) return 'map4.mp3';                // 이벤트: 눈사람
   if(MODE==='hole') return 'map3.mp3';       // 이벤트: 구멍 빨아들이기
@@ -2284,7 +2376,8 @@ window.__HOLE = {
   get flats(){ return loose.filter(function(o){return o.kind==='flat';}).length; },
   get ballR(){ return ball.r; }, get score(){ return ball.score; }, get running(){ return running; },
   kinds(){ var k={}; monsters.forEach(function(m){k[m.kind]=(k[m.kind]||0)+1;}); return k; },
-  step(dt){ dt=dt||0.05; if(running&&!ended){ if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0){ updateMapExtras(dt); updateFalling(dt); } else if(SNOW){ updateSnow(dt); updateFalling(dt); } } } updateSplats(dt); },
+  step(dt){ dt=dt||0.05; if(running&&!ended){ if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0){ updateMapExtras(dt); updateFalling(dt); } else if(SNOW){ updateSnow(dt); updateFalling(dt); } else if(DUNG){ updateSprouts(dt); updateFalling(dt); } } } updateSplats(dt); },
+  get dung(){ return DUNG; }, get sprouts(){ return sprouts.length; }, get goalR(){ return goalR(); },
   get snow(){ return SNOW; }, get snowMovers(){ return snowMovers.length; }, get assembling(){ return !!snowAssemble; },
   get snowSinks(){ return snowSinks.length; }, get snowArrow(){ return !!snowArrow; }, get snowBuilt(){ return !!(snowAssemble&&snowAssemble.built); },
   get projectiles(){ return projectiles.length; },
@@ -2371,7 +2464,7 @@ function loop(now){
     countdown=Math.max(0,countdown-dt);
     updateCamera(dt); updateCountdownUI();
   } else if(running && !ended){
-    if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0){ updateMapExtras(dt); updateFalling(dt); } else if(SNOW){ updateSnow(dt); updateFalling(dt); } }
+    if(MODE==='roll'){ updateBall(dt); updateAbsorb(dt); if(MAP>0){ updateMapExtras(dt); updateFalling(dt); } else if(SNOW){ updateSnow(dt); updateFalling(dt); } else if(DUNG){ updateSprouts(dt); updateFalling(dt); } }
     else if(MODE==='hole'){ updateHole(dt); updateAbsorbHole(dt); updateFalling(dt); }
     else { updateRoom(dt); updateFalling(dt); }
     updateCamera(dt);
@@ -2429,6 +2522,8 @@ function clearWorld(){
   for(const h of iceHoles) scene.remove(h.grp); iceHoles=[];
   for(const p of projectiles) scene.remove(p.grp); projectiles=[];
   if(santa){ scene.remove(santa); santa=null; } icePatches=[]; snowVel={x:0,z:0};
+  for(const s of sprouts) scene.remove(s.grp); sprouts=[];
+  if(dungScape){ scene.remove(dungScape); dungScape=null; }
   for(const s of snowSinks) scene.remove(s.grp); snowSinks=[];
   if(snowArrow){ scene.remove(snowArrow); snowArrow=null; } snowThrowT=8;
   roomSink=null; roomTotal=0; ballSink=null;
@@ -2436,12 +2531,13 @@ function clearWorld(){
   ballGroup.scale.setScalar(1);
 }
 // 맵별 제한시간(+30초): 맵1=90·맵2=120·맵3,4=150·맵5,6=180 / 이벤트=150
-function roundTimeFor(){ if(MAP>0) return [0,90,120,150,150,180,180][MAP]; return 150; }
+function roundTimeFor(){ if(DUNG) return 120; if(MAP>0) return [0,90,120,150,150,180,180][MAP]; return 150; }
 function beginRound(mode){
   // 맵 모드(map1~6) → 롤 메커니즘 + 테마 레벨 / snow → 눈사람 만들기 이벤트
   let mapId=0; const mm=/^map([1-6])$/.exec(mode||'');
   if(mm){ mapId=+mm[1]; mode='roll'; }
   SNOW = (mode==='snow'); if(SNOW) mode='roll';
+  DUNG = 0; if(mode==='dung'){ DUNG=1; mode='roll'; } else if(mode==='dungcity'){ DUNG=2; mode='roll'; }
   MAP = mapId; MODE = mode;
   clearWorld();
   ball = { x:0, z:0, r:START_R, vol:0, area:Math.PI*START_R*START_R, heading:0, score:0, hp:300, hpMax:300 };
@@ -2485,11 +2581,13 @@ function beginRound(mode){
   const outdoor = (mode!=='room');
   outdoorGroup.visible = outdoor; skyDome.visible = outdoor; roomGroup.visible = !outdoor;
   if(mode==='roll'){
-    for(let i=0;i<5;i++){ const star=new THREE.Mesh(new THREE.TetrahedronGeometry(0.32), MAT(0xffe066));
+    core.material.color.setHex(DUNG?0x5e4023:0x9a8350);   // 쇠똥구리: 진한 똥 갈색
+    if(!DUNG){ for(let i=0;i<5;i++){ const star=new THREE.Mesh(new THREE.TetrahedronGeometry(0.32), MAT(0xffe066));
       const d=new THREE.Vector3(rand(-1,1),rand(-1,1),rand(-1,1)).normalize();
-      star.position.copy(d); ballGroup.add(star); stuck.push({grp:star,dir:d}); }
+      star.position.copy(d); ballGroup.add(star); stuck.push({grp:star,dir:d}); } }
+    if(DUNG) buildDungWorld(DUNG);
     refreshBall();
-    ballGroup.visible=true; prince.visible=true; holeGroup.visible=false; blueBall.visible=false;
+    ballGroup.visible=true; prince.visible=(!DUNG); holeGroup.visible=false; blueBall.visible=false;
     camera.position.set(0, 5.4, -7.4);
   } else if(mode==='hole'){
     refreshHole();
@@ -2500,7 +2598,7 @@ function beginRound(mode){
     ballGroup.visible=false; prince.visible=false; holeGroup.visible=false; blueBall.visible=true;
     camera.position.set(0, 6.0, -7.6);
   }
-  if(mode==='room') populateRoom(); else populate();
+  if(mode==='room') populateRoom(); else if(DUNG) populateDung(DUNG); else populate();
   document.getElementById('start').classList.add('hidden');
   document.getElementById('end').classList.add('hidden');
   running=true; ended=false; timeLeft=roundTimeFor(); growMark=START_R;

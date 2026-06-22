@@ -44,6 +44,8 @@ const kMaps = <GameMode>[
 ];
 const kEventModes = <GameMode>[
   GameMode('snow', '⛄', '눈사람 만들기', '눈덩이를 굴려 키워 눈사람 완성!', Color(0xFF4FB0E0)),
+  GameMode('dung', '🪲', '쇠똥구리 · 마을', '버섯·풀·꽃 마을의 소똥을 굴려 산까지 뭉개라!', Color(0xFF6B4A2A)),
+  GameMode('dungcity', '🌆', '쇠똥구리 · 도시', '소똥 덩어리를 굴려 도시를 통째로 뭉개라!', Color(0xFF8A6238)),
   GameMode('roll', '🟢', '공 굴리기', '끈끈한 공에 물건을 붙여 키운다', Color(0xFF7BBF3A)),
   GameMode('hole', '⚫', '구멍 빨아들이기', '구멍으로 물건을 쏙쏙 삼킨다', Color(0xFF3A3550)),
 ];
