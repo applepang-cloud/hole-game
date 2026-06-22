@@ -264,6 +264,7 @@ const stageEl = document.getElementById('stage');
 const cv = document.getElementById('g');
 
 let renderer, scene, camera, sun, skyDome;
+let hemiL, ambL, fillL, rimL, mapLightGroup=null, mapLights=[], sunOff=[18,34,14];   // 맵별 조명
 let ballGroup, core, prince, holeGroup;
 let outdoorGroup, roomGroup, blueBall, blueCore;
 let holes = [];               // [방] 검은 구멍들 {grp,x,z,r}
@@ -294,9 +295,9 @@ function initThree(){
   camera = new THREE.PerspectiveCamera(52, VIEW.w/VIEW.h, 0.1, 600);
   camera.position.set(0, 5.4, -7.4);
 
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x8fb87a, 0.78);
-  scene.add(hemi);
-  scene.add(new THREE.AmbientLight(0xffffff, 0.18));
+  hemiL = new THREE.HemisphereLight(0xffffff, 0x8fb87a, 0.78);
+  scene.add(hemiL);
+  ambL = new THREE.AmbientLight(0xffffff, 0.18); scene.add(ambL);
   sun = new THREE.DirectionalLight(0xfff2d6, 0.95);
   sun.position.set(18, 34, 14);
   sun.castShadow = true;
@@ -307,13 +308,14 @@ function initThree(){
   sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
   sun.shadow.radius = 3;                        // 부드러운 그림자
   scene.add(sun); scene.add(sun.target);
-  const fill = new THREE.DirectionalLight(0xbfe0ff, 0.22);
-  fill.position.set(-30, 25, -20);
-  scene.add(fill);
+  fillL = new THREE.DirectionalLight(0xbfe0ff, 0.22);
+  fillL.position.set(-30, 25, -20);
+  scene.add(fillL);
   // 림 라이트(뒤쪽) — 캐릭터 외곽이 살아남
-  const rim = new THREE.DirectionalLight(0xffffff, 0.25);
-  rim.position.set(-10, 16, -28);
-  scene.add(rim);
+  rimL = new THREE.DirectionalLight(0xffffff, 0.25);
+  rimL.position.set(-10, 16, -28);
+  scene.add(rimL);
+  mapLightGroup = new THREE.Group(); scene.add(mapLightGroup);
 
   buildSky();
   buildEnvironment();
@@ -327,7 +329,7 @@ function initThree(){
 // 그림자 광원이 플레이어를 따라오게 (선명한 근거리 그림자)
 function followSun(){
   if(!sun) return;
-  sun.position.set(ball.x+18, 34, ball.z+14);
+  sun.position.set(ball.x+sunOff[0], sunOff[1], ball.z+sunOff[2]);
   sun.target.position.set(ball.x, 0, ball.z);
   sun.target.updateMatrixWorld();
 }
@@ -1184,6 +1186,34 @@ const MAPS={
   5:{ name:'도시 거리', bound:31, indoor:false, sky:0xcdd6e0, ground:0x8a8f96, road:0x44474d },
   6:{ name:'저승 공동묘지', bound:28, indoor:false, sky:0x2a2740, ground:0x3a4a3f, road:0x2e2a3a },
 };
+/* --- 맵별 조명/분위기 프리셋 --- */
+const LIGHTING={
+  // pts: [color, intensity, distance, x,y,z, flicker(0~1)]
+  default:{ clear:0xaee5ff, fog:0xbfeaff, fogN:80, fogF:170, exp:1.12, sunC:0xfff2d6, sunI:1.0, sunP:[18,34,14], hemiS:0xffffff, hemiG:0x8fb87a, hemiI:0.78, amb:0.18, fillI:0.22, rimI:0.25, pts:[] },
+  yard:{ clear:0x9fdcff, fog:0xbfeaff, fogN:70, fogF:160, exp:1.14, sunC:0xfff4d2, sunI:1.15, sunP:[16,36,12], hemiS:0xffffff, hemiG:0x7ec05a, hemiI:0.85, amb:0.2, fillI:0.22, rimI:0.25, pts:[] },
+  room:{ clear:0x241c2c, fog:0x2a2230, fogN:16, fogF:55, exp:1.04, sunC:0xffd9a0, sunI:0.4, sunP:[8,24,10], hemiS:0xffe6c0, hemiG:0x5a4a3a, hemiI:0.5, amb:0.26, fillI:0.12, rimI:0.18, pts:[[0xffcf80,1.3,26,2,4.6,0,0.08]] },
+  mart:{ clear:0xdfe7ee, fog:0xe6edf3, fogN:30, fogF:90, exp:1.08, sunC:0xeef4ff, sunI:0.65, sunP:[10,30,8], hemiS:0xffffff, hemiG:0xc8d0d8, hemiI:0.95, amb:0.32, fillI:0.25, rimI:0.2, pts:[[0xeaf4ff,0.7,40,-8,6,-6,0],[0xeaf4ff,0.7,40,8,6,6,0]] },
+  school:{ clear:0xe2e6dd, fog:0xe6ead8, fogN:30, fogF:90, exp:1.1, sunC:0xfff6e0, sunI:0.8, sunP:[12,30,10], hemiS:0xffffff, hemiG:0xc4cbb8, hemiI:0.88, amb:0.28, fillI:0.22, rimI:0.22, pts:[] },
+  city:{ clear:0xc4ccd6, fog:0xc8ced6, fogN:55, fogF:150, exp:1.05, sunC:0xeef0f4, sunI:0.7, sunP:[14,32,10], hemiS:0xcdd6e0, hemiG:0x7a7f86, hemiI:0.72, amb:0.22, fillI:0.2, rimI:0.22, pts:[[0xffcf80,0.9,16,-7,3.2,-4,0.05],[0xffcf80,0.9,16,7,3.2,5,0.05]] },
+  grave:{ clear:0x14121f, fog:0x191626, fogN:18, fogF:58, exp:0.95, sunC:0x9fb0d0, sunI:0.35, sunP:[-10,30,-14], hemiS:0x2a2740, hemiG:0x12160f, hemiI:0.42, amb:0.12, fillI:0.1, rimI:0.3, pts:[[0x7af0d0,1.3,15,-6,1.4,4,0.6],[0x9a7af5,1.1,15,7,1.4,-3,0.6],[0x7af0d0,1.0,14,2,1.2,-8,0.6]] },
+  snow:{ clear:0x0a1430, fog:0x18255a, fogN:50, fogF:150, exp:1.05, sunC:0xcfe0ff, sunI:0.6, sunP:[-12,32,-10], hemiS:0x4a6cff, hemiG:0x9fb8d8, hemiI:0.6, amb:0.2, fillI:0.18, rimI:0.3, pts:[[0x49f5b0,0.7,42,-10,16,-18,0.25],[0x4fd0f5,0.7,42,8,16,-18,0.25]] },
+};
+function setMapLighting(theme){
+  const L=LIGHTING[theme]||LIGHTING.default;
+  renderer.setClearColor(L.clear,1); renderer.toneMappingExposure=L.exp;
+  if(scene.fog){ scene.fog.color.setHex(L.fog); scene.fog.near=L.fogN; scene.fog.far=L.fogF; }
+  sun.color.setHex(L.sunC); sun.intensity=L.sunI; sunOff=L.sunP.slice();
+  hemiL.color.setHex(L.hemiS); hemiL.groundColor.setHex(L.hemiG); hemiL.intensity=L.hemiI;
+  ambL.intensity=L.amb; fillL.intensity=L.fillI; rimL.intensity=L.rimI;
+  if(mapLightGroup) scene.remove(mapLightGroup);
+  mapLightGroup=new THREE.Group(); scene.add(mapLightGroup); mapLights=[];
+  (L.pts||[]).forEach(p=>{ const pl=new THREE.PointLight(p[0],p[1],p[2]); pl.position.set(p[3],p[4],p[5]); mapLightGroup.add(pl); mapLights.push({light:pl,base:p[1],flick:p[6]||0}); });
+}
+function updateMapLights(){
+  if(!mapLights.length) return; const tt=performance.now();
+  for(const m of mapLights){ if(m.flick>0) m.light.intensity = m.base*(1 - m.flick*0.5 + m.flick*(0.5+0.5*Math.sin(tt*0.01*(1+m.base))) + (Math.random()-0.5)*m.flick*0.3); }
+}
+
 function buildMapWorld(id){
   if(mapGroup) scene.remove(mapGroup);
   mapGroup=new THREE.Group(); scene.add(mapGroup);
@@ -2162,6 +2192,7 @@ function loop(now){
   }
   updatePuffs(dt);
   updateSplats(dt);
+  updateMapLights();
   followSun();
   renderer.render(scene,camera);
   }catch(e){ console.error('loop error', e); }
@@ -2215,7 +2246,7 @@ function beginRound(mode){
     document.getElementById('end').classList.add('hidden');
     running=true; ended=false; timeLeft=ROUND_TIME; growMark=START_R;
     if(gyroOn) recenterGyro();
-    initAudio(); setAmbient('snow'); updateModeUI(); updateHUD(); updateTime();
+    initAudio(); setMapLighting('snow'); setAmbient('snow'); updateModeUI(); updateHUD(); updateTime();
     return;
   }
   if(MAP>0){
@@ -2233,7 +2264,7 @@ function beginRound(mode){
     document.getElementById('end').classList.add('hidden');
     running=true; ended=false; timeLeft=ROUND_TIME; growMark=START_R;
     if(gyroOn) recenterGyro();
-    initAudio(); setAmbient(['','room','yard','mart','school','city','grave'][MAP]); updateModeUI(); updateHUD(); updateTime();
+    initAudio(); setMapLighting(['','room','yard','mart','school','city','grave'][MAP]); setAmbient(['','room','yard','mart','school','city','grave'][MAP]); updateModeUI(); updateHUD(); updateTime();
     return;
   }
   const outdoor = (mode!=='room');
@@ -2259,7 +2290,7 @@ function beginRound(mode){
   document.getElementById('end').classList.add('hidden');
   running=true; ended=false; timeLeft=ROUND_TIME; growMark=START_R;
   if(gyroOn) recenterGyro();
-  initAudio(); setAmbient(mode==='room'?'room':'yard'); updateModeUI(); updateHUD(); updateTime();
+  initAudio(); setMapLighting('default'); setAmbient(mode==='room'?'room':'yard'); updateModeUI(); updateHUD(); updateTime();
 }
 function finish(win, reason){
   ended=true; running=false; endStick(); setAmbient('');
