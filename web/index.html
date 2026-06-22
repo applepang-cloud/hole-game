@@ -89,10 +89,33 @@
         on = !!on;
         if(on===menuOn && menuMus) return;
         menuOn = on;
-        if(!menuMus){ menuMus=new Audio('main.mp3'); menuMus.loop=true; menuMus.volume=0.12; }
+        if(!menuMus){ menuMus=new Audio('main.mp3'); menuMus.loop=true; menuMus.volume=0.084; }
         if(on){ var p=menuMus.play(); if(p&&p.catch) p.catch(function(){}); }
         else { menuMus.pause(); }
       };
+      // 대사 말풍선 효과음(짧은 블립) — 셸 WebAudio
+      var dlgActx=null;
+      window.holeBubbleSfx = function(){
+        try{ if(!dlgActx) dlgActx=new (window.AudioContext||window.webkitAudioContext)();
+          var t=dlgActx.currentTime, o=dlgActx.createOscillator(), g=dlgActx.createGain();
+          o.type='triangle'; o.frequency.setValueAtTime(620,t); o.frequency.exponentialRampToValueAtTime(880,t+0.08);
+          g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.14,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
+          o.connect(g); g.connect(dlgActx.destination); o.start(t); o.stop(t+0.18);
+        }catch(_){}
+      };
+      // 대사 TTS — pitch로 성별 구분(여:높게, 남:낮게, 중립:1)
+      var koVoice=null;
+      function pickVoice(){ try{ var vs=speechSynthesis.getVoices(); koVoice=vs.find(function(v){return /ko/i.test(v.lang);})||null; }catch(_){} }
+      try{ pickVoice(); if(speechSynthesis.onvoiceschanged!==undefined) speechSynthesis.onvoiceschanged=pickVoice; }catch(_){}
+      window.holeSpeak = function(text, pitch){
+        try{ if(!('speechSynthesis' in window)) return; speechSynthesis.cancel();
+          var u=new SpeechSynthesisUtterance(text); u.lang='ko-KR'; u.pitch=pitch||1.0; u.rate=1.04; u.volume=0.9;
+          if(koVoice) u.voice=koVoice; speechSynthesis.speak(u);
+        }catch(_){}
+      };
+      window.holeStopSpeak = function(){ try{ speechSynthesis.cancel(); }catch(_){} };
+      // 볼 민감도 조절(일시정지 슬라이더)
+      window.holeSetSensitivity = function(v){ try{ var e=frame.contentWindow && frame.contentWindow.__holeEngine; if(e && e.setSensitivity) e.setSensitivity(v); }catch(_){} };
       // 스토리 진행도 저장(클리어한 맵 번호, 콤마구분)
       window.holeGetCleared = function(){ try{ return localStorage.getItem('hole.cleared')||''; }catch(_){ return ''; } };
       window.holeSetCleared = function(s){ try{ localStorage.setItem('hole.cleared', s||''); }catch(_){} };

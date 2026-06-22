@@ -20,6 +20,14 @@ external void _holePause();
 external void _holeResume();
 @JS('holeMenuMusic')
 external void _holeMenuMusic(JSBoolean on);
+@JS('holeBubbleSfx')
+external void _holeBubbleSfx();
+@JS('holeSpeak')
+external void _holeSpeak(JSString text, double pitch);
+@JS('holeStopSpeak')
+external void _holeStopSpeak();
+@JS('holeSetSensitivity')
+external void _holeSetSensitivity(double v);
 @JS('holeGetCleared')
 external JSString _holeGetCleared();
 @JS('holeSetCleared')
@@ -173,6 +181,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Rect? _stage; // 게임 스테이지(레터박스) 사각형 — HUD 정렬용
   bool _music = true, _sound = true, _gyro = false; // 오디오/자이로 토글 상태
   bool _paused = false; // 일시정지 여부
+  double _sensitivity = 1.0; // 볼 민감도(기본 1.0)
 
   String _screen = 'home'; // 'home' | 'story' | 'event' (플레이/대사 아닐 때)
   bool _storyMode = false; // 현재 진행이 스토리인지
@@ -390,6 +399,8 @@ class _HomeScreenState extends State<HomeScreen> {
         onResume: _resume,
         onRestart: _again,
         onHome: _toHome,
+        sensitivity: _sensitivity,
+        onSensitivity: (v) { setState(() => _sensitivity = v); _holeSetSensitivity(v); },
       );
     } else if (_screen == 'story') {
       content = KeyedSubtree(
@@ -463,12 +474,16 @@ class _HudOverlay extends StatelessWidget {
     required this.onResume,
     required this.onRestart,
     required this.onHome,
+    required this.sensitivity,
+    required this.onSensitivity,
   });
   final Map<String, dynamic> state;
   final Rect? stage;
   final bool music, sound, gyro, paused;
+  final double sensitivity;
   final void Function(double x, double y) onInput;
   final void Function(String what) onToggle;
+  final void Function(double v) onSensitivity;
   final VoidCallback onPause, onResume, onRestart, onHome;
 
   static const _cream = Color(0xFFFFF7E6);
@@ -639,7 +654,25 @@ class _HudOverlay extends StatelessWidget {
             children: [
               const Text('⏸ 일시정지',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: _ink)),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
+              // 볼 민감도 조절 (기본 1.0)
+              Row(children: [
+                const Text('볼 민감도', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _ink)),
+                const Spacer(),
+                Text('${sensitivity.toStringAsFixed(1)}x',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _org)),
+              ]),
+              SliderTheme(
+                data: const SliderThemeData(
+                  activeTrackColor: _org, thumbColor: _org, inactiveTrackColor: Color(0xFFE6D8B8),
+                  overlayColor: Color(0x33E8552D),
+                ),
+                child: Slider(
+                  min: 0.4, max: 2.0, divisions: 16, value: sensitivity.clamp(0.4, 2.0),
+                  onChanged: onSensitivity,
+                ),
+              ),
+              const SizedBox(height: 6),
               _pauseAction('▶  계속하기', const Color(0xFF7BBF3A), onResume),
               const SizedBox(height: 10),
               _pauseAction('🔄  다시하기', const Color(0xFFEF5D1E), onRestart),
@@ -1134,15 +1167,55 @@ class _DialogueOverlay extends StatefulWidget {
   State<_DialogueOverlay> createState() => _DialogueOverlayState();
 }
 
-class _DialogueOverlayState extends State<_DialogueOverlay> {
+class _DialogueOverlayState extends State<_DialogueOverlay>
+    with SingleTickerProviderStateMixin {
   int _i = 0;
+  late final AnimationController _pulseC;
+  late final Animation<double> _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseC = AnimationController(vsync: this, duration: const Duration(milliseconds: 760));
+    _pulse = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.13), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 1.13, end: 1.0), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.13), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 1.13, end: 1.0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _pulseC, curve: Curves.easeInOut));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _speak());
+  }
+
+  // 성별 추정: 엄마/어머니=여성(높게), 주인공 소년=남성(낮게), 그 외=단일(중립)
+  double _voicePitch(StoryLine line) {
+    final n = line.name;
+    if (n.contains('엄마') || n.contains('어머니')) return 1.35;
+    if (!line.left) return 0.95;
+    return 1.0;
+  }
+
+  void _speak() {
+    final line = widget.lines[_i];
+    _holeBubbleSfx();
+    _holeSpeak(line.text.toJS, _voicePitch(line));
+    _pulseC.forward(from: 0);
+  }
 
   void _next() {
     if (_i < widget.lines.length - 1) {
       setState(() => _i++);
+      _speak();
     } else {
+      _holeStopSpeak();
       widget.onDone();
     }
+  }
+
+  @override
+  void dispose() {
+    _holeStopSpeak();
+    _pulseC.dispose();
+    super.dispose();
   }
 
   @override
@@ -1225,7 +1298,7 @@ class _DialogueOverlayState extends State<_DialogueOverlay> {
     }
     if (c == null) return const SizedBox(width: 1, height: 1);
     final speaking = line.left == leftSlot;
-    return AnimatedScale(
+    final portrait = AnimatedScale(
       duration: const Duration(milliseconds: 180),
       scale: speaking ? 1.0 : 0.84,
       child: Opacity(
@@ -1247,6 +1320,9 @@ class _DialogueOverlayState extends State<_DialogueOverlay> {
         ),
       ),
     );
+    if (!speaking) return portrait;
+    // 말하는 캐릭터 — 확대/축소 2회 펄스
+    return ScaleTransition(scale: _pulse, child: portrait);
   }
 
   Widget _bubble(StoryLine line) {

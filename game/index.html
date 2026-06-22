@@ -266,6 +266,7 @@ const MAX_STUCK = 230;        // 표시 유지 최대 부착물
 
 let MODE = 'roll';            // 'roll' | 'hole'
 let DUNG = 0;                 // 쇠똥구리: 0=아님 1=마을(산) 2=도시
+let sensitivity = 1.0;        // 볼 민감도(일시정지서 조절, 기본 1.0)
 const goalR = ()=> DUNG ? (DUNG===2 ? 2.6 : 2.2) : GOAL[MODE];
 
 const stageEl = document.getElementById('stage');
@@ -1845,12 +1846,20 @@ function updateAssemble(dt){
 /* ===================== 쇠똥구리(소똥 굴리기) 이벤트 ===================== */
 let sprouts=[], dungScape=null, dungWin=null, dungPiles=[];   // 새싹 / 풍경 / 연출 / 바닥 똥(흡수·충돌)
 function buildDungPile(){ const g=new THREE.Group();   // 소똥 덩어리
-  const n=2+((Math.random()*2)|0);
-  for(let i=0;i<n;i++){ const r=rand(0.18,0.34); const lump=new THREE.Mesh(new THREE.IcosahedronGeometry(r,1),SMAT(0x6b4a2a,8,0x201509));
+  const n=2+((Math.random()*2)|0); const mats=[];
+  for(let i=0;i<n;i++){ const r=rand(0.18,0.34); const mat=SMAT(0x6b4a2a,8,0x201509); mats.push(mat);
+    const lump=new THREE.Mesh(new THREE.IcosahedronGeometry(r,1),mat);
     lump.position.set(rand(-0.2,0.2), r*0.8, rand(-0.2,0.2)); lump.scale.y=0.8; g.add(lump); }
-  // 윤기 한 방울
-  const top=new THREE.Mesh(new THREE.SphereGeometry(0.1,8,7),SMAT(0x8a6238,30,0x554)); top.position.y=0.5; g.add(top);
+  const tmat=SMAT(0x8a6238,30,0x554); mats.push(tmat);
+  const top=new THREE.Mesh(new THREE.SphereGeometry(0.1,8,7),tmat); top.position.y=0.5; g.add(top);
+  g.userData.mats=mats; g.userData.danger=null;
   addShadow(g,0.5); return tag(g,0.46,0); }
+// 똥 색: 작으면(흡수 가능) 똥색, 크면(위험) 붉은 똥색
+function setDungColor(p, danger){
+  if(p.grp.userData.danger===danger) return; p.grp.userData.danger=danger;
+  const c=danger?0xb83a2a:0x6b4a2a, ct=danger?0xd0573a:0x8a6238;
+  const mats=p.grp.userData.mats; for(let i=0;i<mats.length;i++) mats[i].color.setHex(i===mats.length-1?ct:c);
+}
 function buildMushroom(){ const g=new THREE.Group();
   const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.16,0.5,8),MAT(0xf2e9d8)); stem.position.y=0.25; g.add(stem);
   const cap=new THREE.Mesh(new THREE.SphereGeometry(0.34,12,8,0,Math.PI*2,0,Math.PI/2),MAT(0xd8453a)); cap.position.y=0.5; g.add(cap);
@@ -1907,6 +1916,7 @@ function updateDung(dt){
   if(dungWin){ updateDungCrush(dt); return; }
   const r=ball.r;
   for(let i=dungPiles.length-1;i>=0;i--){ const p=dungPiles[i];
+    setDungColor(p, r < p.size*0.9);   // 나보다 크면 붉은 똥색
     const d=Math.hypot(p.x-ball.x, p.z-ball.z);
     if(d < r + p.size){
       if(r >= p.size*0.9){   // 나보다 작은 똥 → 흡수
@@ -1995,7 +2005,7 @@ function inputVector(){
   if(keys['a']||keys['arrowleft']) x-=1;
   if(keys['d']||keys['arrowright']) x+=1;
   const m=Math.hypot(x,y); if(m>1){ x/=m; y/=m; }
-  return {x,y,m:Math.min(1,m)};
+  return {x,y,m:Math.min(1,m)*sensitivity};   // 볼 민감도 반영
 }
 
 /* ===================== 자이로(기울기) 조작 ===================== */
@@ -2284,7 +2294,7 @@ function trackFor(){
 }
 function setMusic(file){
   if(!file) return;
-  if(!bgm){ bgm=new Audio(); bgm.loop=true; bgm.volume=0.27; bgm.preload='auto'; }
+  if(!bgm){ bgm=new Audio(); bgm.loop=true; bgm.volume=0.19; bgm.preload='auto'; }
   if(bgmFile!==file){ bgmFile=file; bgm.src=MUSIC_BASE+file; try{ bgm.load(); }catch(_){} }
   if(musicOn){ try{ bgm.currentTime=0; }catch(_){}  const p=bgm.play(); if(p&&p.catch) p.catch(()=>{}); } else { bgm.pause(); }
 }
@@ -2407,6 +2417,7 @@ function emitControls(){ EMIT({ type:'controls', music:musicOn, sound:soundOn, g
 window.__holeEngine = {
   start: function(m){ beginRound(m); _lastSec=-1; emitState(); emitControls(); },
   input: function(x,y){ moveVec={ x:Math.max(-1,Math.min(1,x)), y:Math.max(-1,Math.min(1,y)) }; },
+  setSensitivity: function(v){ sensitivity = Math.max(0.3, Math.min(2.5, v||1)); },
   stop:  function(){ running=false; moveVec={x:0,y:0}; },
   pause: function(){ if(!ended) running=false; moveVec={x:0,y:0}; },
   resume:function(){ if(!ended) running=true; },
