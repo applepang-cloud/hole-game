@@ -2645,7 +2645,7 @@ function clearWorld(){
   ballGroup.scale.setScalar(1);
 }
 // 맵별 제한시간(+30초): 맵1=90·맵2=120·맵3,4=150·맵5,6=180 / 이벤트=150
-function roundTimeFor(){ if(DUNG) return 150; if(MAP>0) return [0,120,150,180,180,210,210][MAP]; return 180; }
+function roundTimeFor(){ if(DUNG) return 150; if(MAP>0) return [0,90,150,180,180,210,210][MAP]; return 180; }
 function beginRound(mode){
   // 맵 모드(map1~6) → 롤 메커니즘 + 테마 레벨 / snow → 눈사람 만들기 이벤트
   let mapId=0; const mm=/^map([1-6])$/.exec(mode||'');

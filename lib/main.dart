@@ -1196,24 +1196,24 @@ class _DialogueOverlayState extends State<_DialogueOverlay>
 
   void _speak() {
     final line = widget.lines[_i];
-    _holeBubbleSfx();
-    _holeSpeak(line.text.toJS, _voicePitch(line));
-    _pulseC.forward(from: 0);
+    try { _holeBubbleSfx(); } catch (_) {}
+    try { _holeSpeak(line.text.toJS, _voicePitch(line)); } catch (_) {}
+    try { _pulseC.forward(from: 0); } catch (_) {}
   }
 
   void _next() {
+    // 진행은 부수효과(사운드/TTS/펄스)와 무관하게 항상 동작
     if (_i < widget.lines.length - 1) {
       setState(() => _i++);
       _speak();
     } else {
-      _holeStopSpeak();
-      widget.onDone();
+      widget.onDone();   // 마지막 → 다음 단계 진행(음성 정지는 dispose가 담당)
     }
   }
 
   @override
   void dispose() {
-    _holeStopSpeak();
+    try { _holeStopSpeak(); } catch (_) {}
     _pulseC.dispose();
     super.dispose();
   }

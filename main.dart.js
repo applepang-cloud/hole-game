@@ -66096,20 +66096,17 @@ a2q(a){var s=a.c
 if(B.d.q(s,"\uc5c4\ub9c8")||B.d.q(s,"\uc5b4\uba38\ub2c8"))return 1.35
 if(!a.a)return 0.95
 return 1},
-Ij(){var s=this,r=s.a.c[s.d],q=v.G
-q.holeBubbleSfx()
-q.holeSpeak(r.d,s.a2q(r))
-q=s.e
-q===$&&A.a()
-q.mB(0)},
-ZP(){var s=this
-if(s.d<s.a.c.length-1){s.a9(new A.a54(s))
-s.Ij()}else{v.G.holeStopSpeak()
-s.a.a8Q()}},
-l(){v.G.holeStopSpeak()
-var s=this.e
-s===$&&A.a()
-s.l()
+Ij(){var s,r,q=this,p=q.a.c[q.d]
+try{v.G.holeBubbleSfx()}catch(s){}try{v.G.holeSpeak(p.d,q.a2q(p))}catch(s){}try{r=q.e
+r===$&&A.a()
+r.mB(0)}catch(s){}},
+ZP(){var s=this,r=s.d,q=s.a
+if(r<q.c.length-1){s.a9(new A.a54(s))
+s.Ij()}else q.a8Q()},
+l(){var s,r
+try{v.G.holeStopSpeak()}catch(s){}r=this.e
+r===$&&A.a()
+r.l()
 this.SR()},
 P(a){var s,r,q=this,p=null,o=q.a.c[q.d],n=t.F,m=A.d([],n),l=q.a.e
 if(l!=null)m.push(A.Yw(0,A.Tm("assets/backgrounds/bg"+A.k(l)+".jpg",new A.a55(),B.e3,p,p)))
