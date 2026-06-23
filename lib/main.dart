@@ -1,39 +1,15 @@
 import 'dart:convert';
-import 'dart:js_interop';
-import 'dart:js_interop_unsafe';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'ad_service.dart';
+import 'bridge.dart';
+import 'game_webview.dart' if (dart.library.js_interop) 'game_webview_stub.dart';
 
-/// web/index.html 의 브리지 함수 (three.js 게임 오버레이 제어)
-@JS('holeShowGame')
-external void _holeShowGame(JSString mode);
-@JS('holeHideGame')
-external void _holeHideGame();
-@JS('holeRestart')
-external void _holeRestart(JSString mode);
-@JS('holeInput')
-external void _holeInput(double x, double y);
-@JS('holeToggle')
-external void _holeToggle(JSString what);
-@JS('holePause')
-external void _holePause();
-@JS('holeResume')
-external void _holeResume();
-@JS('holeMenuMusic')
-external void _holeMenuMusic(JSBoolean on);
-@JS('holeBubbleSfx')
-external void _holeBubbleSfx();
-@JS('holeSpeak')
-external void _holeSpeak(JSString text, double pitch);
-@JS('holeStopSpeak')
-external void _holeStopSpeak();
-@JS('holeSetSensitivity')
-external void _holeSetSensitivity(double v);
-@JS('holeGetCleared')
-external JSString _holeGetCleared();
-@JS('holeSetCleared')
-external void _holeSetCleared(JSString s);
-
-void main() => runApp(const HoleApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AdService.initialize();
+  runApp(const HoleApp());
+}
 
 /// 게임 모드 정의 — 모드 선택/엔드카드 텍스트를 Flutter가 소유한다.
 class GameMode {
@@ -201,20 +177,18 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // 게임(three.js) → Flutter 메시지 수신 등록
-    globalContext['__holeOnGameMsg'] = ((JSString json) {
-      _onGameMsg(json.toDart);
-    }).toJS;
+    // 게임(three.js) → Flutter 메시지 수신 등록 (bridge가 플랫폼별 처리)
+    registerOnGameMsg(_onGameMsg);
     // 스토리 진행도 로드
     try {
-      final s = _holeGetCleared().toDart;
+      final s = holeGetCleared();
       _cleared = s.split(',').where((e) => e.isNotEmpty).map(int.parse).toSet();
     } catch (_) {}
   }
 
   void _saveCleared() {
     try {
-      _holeSetCleared((_cleared.toList()..sort()).join(',').toJS);
+      holeSetCleared((_cleared.toList()..sort()).join(','));
     } catch (_) {}
   }
 
@@ -246,32 +220,36 @@ class _HomeScreenState extends State<HomeScreen> {
         if (mounted) setState(() {});
         break;
       case 'over': // 게임 오버
-        _holeHideGame();
+        holeHideGame();
         final win = msg['win'] == true;
         final num = _mapNum(_mode);
-        if (_storyMode && win && num != null) {
-          // 스토리 클리어 → 진행도 저장 + 종료 대사 → 리스트(다음 맵 손가락)
-          _cleared.add(num);
-          _saveCleared();
-          final next = num + 1;
-          setState(() {
-            _playing = false;
-            _paused = false;
-            _result = null;
-          });
-          _startDialogue(kStory[num]?.outro ?? const [], () {
+        // 광고 표시 후 → 엔드카드/대사 로직 실행
+        AdService.instance.showInterstitial(onClosed: () {
+          if (!mounted) return;
+          if (_storyMode && win && num != null) {
+            // 스토리 클리어 → 진행도 저장 + 종료 대사 → 리스트(다음 맵 손가락)
+            _cleared.add(num);
+            _saveCleared();
+            final next = num + 1;
             setState(() {
-              _screen = 'story';
-              _fingerMap = (next <= kMaps.length && !_cleared.contains(next)) ? next : null;
+              _playing = false;
+              _paused = false;
+              _result = null;
             });
-          }, bg: num);
-        } else {
-          setState(() {
-            _playing = false;
-            _paused = false;
-            _result = msg;
-          });
-        }
+            _startDialogue(kStory[num]?.outro ?? const [], () {
+              setState(() {
+                _screen = 'story';
+                _fingerMap = (next <= kMaps.length && !_cleared.contains(next)) ? next : null;
+              });
+            }, bg: num);
+          } else {
+            setState(() {
+              _playing = false;
+              _paused = false;
+              _result = msg;
+            });
+          }
+        });
         break;
       case 'home': // 인게임 "← 홈" 버튼 → 홈/스토리 리스트 복귀
         setState(() {
@@ -316,7 +294,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _paused = false;
       _playing = true;
     });
-    _holeShowGame(mode.toJS);
+    holeShowGame(mode);
   }
 
   // 스토리 맵 시작 → 시작 대사 후 게임 시작
@@ -330,7 +308,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _paused = false;
         _playing = true;
       });
-      _holeShowGame('map$num'.toJS);
+      holeShowGame('map$num');
     }, bg: num);
   }
 
@@ -342,7 +320,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _paused = false;
       _playing = true;
     });
-    _holeRestart(mode.toJS);
+    holeRestart(mode);
   }
 
   // 홈 복귀 — 스토리면 맵 리스트로, 아니면 홈으로
@@ -353,17 +331,17 @@ class _HomeScreenState extends State<HomeScreen> {
       _playing = false;
       _screen = _storyMode ? 'story' : 'home';
     });
-    _holeHideGame();
+    holeHideGame();
   }
 
   // 일시정지 / 재개
   void _pause() {
-    _holePause();
+    holePause();
     setState(() => _paused = true);
   }
 
   void _resume() {
-    _holeResume();
+    holeResume();
     setState(() => _paused = false);
   }
 
@@ -371,7 +349,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     // 홈 메뉴 + 스토리 대사 등 비게임 화면에선 main 음악, 실제 게임 중엔 정지
     final menuMusic = _dialogue != null || !_playing;
-    _holeMenuMusic(menuMusic.toJS);
+    holeMenuMusic(menuMusic);
     final Widget content;
     if (_dialogue != null) {
       content = _DialogueOverlay(
@@ -399,14 +377,14 @@ class _HomeScreenState extends State<HomeScreen> {
         sound: _sound,
         gyro: _gyro,
         paused: _paused,
-        onInput: (x, y) => _holeInput(x, y),
-        onToggle: (what) => _holeToggle(what.toJS),
+        onInput: (x, y) => holeInput(x, y),
+        onToggle: (what) => holeToggle(what),
         onPause: _pause,
         onResume: _resume,
         onRestart: _again,
         onHome: _toHome,
         sensitivity: _sensitivity,
-        onSensitivity: (v) { setState(() => _sensitivity = v); _holeSetSensitivity(v); },
+        onSensitivity: (v) { setState(() => _sensitivity = v); holeSetSensitivity(v); },
       );
     } else if (_screen == 'story') {
       content = KeyedSubtree(
@@ -448,6 +426,22 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
     // Scaffold 자체는 항상 투명 — 불투명 화면은 _withBackdrop이 직접 그라데이션을 깐다.
+    // Android: 게임 WebView를 아래에 두고 Flutter UI를 오버레이
+    if (!kIsWeb) {
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(children: [
+          GameWebView(
+            visible: _playing && _result == null && _dialogue == null,
+            onMessage: _onGameMsg,
+          ),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            child: content,
+          ),
+        ]),
+      );
+    }
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AnimatedSwitcher(
@@ -1251,8 +1245,8 @@ class _DialogueOverlayState extends State<_DialogueOverlay>
 
   void _speak() {
     final line = widget.lines[_i];
-    try { _holeBubbleSfx(); } catch (_) {}
-    try { _holeSpeak(line.text.toJS, _voicePitch(line)); } catch (_) {}
+    holeBubbleSfx();
+    holeSpeak(line.text, _voicePitch(line));
     try { _pulseC.forward(from: 0); } catch (_) {}
   }
 
@@ -1268,7 +1262,7 @@ class _DialogueOverlayState extends State<_DialogueOverlay>
 
   @override
   void dispose() {
-    try { _holeStopSpeak(); } catch (_) {}
+    holeStopSpeak();
     _pulseC.dispose();
     super.dispose();
   }

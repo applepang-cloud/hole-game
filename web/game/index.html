@@ -2784,7 +2784,11 @@ document.getElementById('bMusic').addEventListener('click', function(){ musicOn=
 
 /* ===================== Flutter 브리지 (엔진 API + 상태 전송) ===================== */
 let _lastSec=-1;
-function EMIT(o){ try{ if(window.parent && window.parent!==window) window.parent.postMessage(Object.assign({hole:true},o),'*'); }catch(e){} }
+function EMIT(o){ try{
+  const d=Object.assign({hole:true},o);
+  if(typeof window.HoleGame!=='undefined') window.HoleGame.postMessage(JSON.stringify(d)); // Android WebView 채널
+  else if(window.parent && window.parent!==window) window.parent.postMessage(d,'*');        // Web iframe
+}catch(e){} }
 function fmtTime(t){ const m=Math.floor(t/60), s=Math.floor(t%60); return m+':'+String(s).padStart(2,'0'); }
 function emitState(){
   const isMap = MAP>0||EX_MAP>0, remain = spawners.length;
@@ -3195,8 +3199,13 @@ requestAnimationFrame(loop);
 (function(){
   var EMBEDDED = false;
   try { EMBEDDED = (window.parent && window.parent !== window); } catch(e){ EMBEDDED = true; }
-  window.__HOLE_EMBEDDED = EMBEDDED;
-  function post(o){ try{ if(EMBEDDED) window.parent.postMessage(Object.assign({hole:true},o), '*'); }catch(e){} }
+  const inWebView = (typeof window.HoleGame !== 'undefined');
+  window.__HOLE_EMBEDDED = EMBEDDED || inWebView;
+  function post(o){ try{
+    const d=Object.assign({hole:true},o);
+    if(inWebView) window.HoleGame.postMessage(JSON.stringify(d));
+    else if(EMBEDDED) window.parent.postMessage(d,'*');
+  }catch(e){} }
   var MODEMAP = { roll:'modeRoll', hole:'modeHole', room:'modeRoom', snow:'modeSnow' };
   function startMode(mode){
     // 모든 모드(map1~6·dung·dungcity·snow·roll·hole·room)는 엔진이 직접 처리
