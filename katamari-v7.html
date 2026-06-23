@@ -567,11 +567,11 @@ function buildBlueBall(){
 function buildHoleMesh(r){
   const g=new THREE.Group();
   const rim=new THREE.Mesh(new THREE.RingGeometry(0.9,1.1,40),
-    new THREE.MeshBasicMaterial({color:0x241c2c})); rim.rotation.x=-Math.PI/2; rim.position.y=0.07; rim.renderOrder=3; g.add(rim);
+    new THREE.MeshBasicMaterial({color:0x241c2c, fog:false})); rim.rotation.x=-Math.PI/2; rim.position.y=0.07; rim.renderOrder=6; g.add(rim);
   const disk=new THREE.Mesh(new THREE.CircleGeometry(1,40),
-    new THREE.MeshBasicMaterial({color:0x05060a})); disk.rotation.x=-Math.PI/2; disk.position.y=0.075; disk.renderOrder=3; g.add(disk);
+    new THREE.MeshBasicMaterial({color:0x05060a, fog:false})); disk.rotation.x=-Math.PI/2; disk.position.y=0.075; disk.renderOrder=6; g.add(disk);
   const inner=new THREE.Mesh(new THREE.RingGeometry(0.66,1.0,40),
-    new THREE.MeshBasicMaterial({color:0x141019, transparent:true, opacity:0.6})); inner.rotation.x=-Math.PI/2; inner.position.y=0.085; inner.renderOrder=4; g.add(inner);
+    new THREE.MeshBasicMaterial({color:0x141019, transparent:true, opacity:0.6, fog:false})); inner.rotation.x=-Math.PI/2; inner.position.y=0.085; inner.renderOrder=7; g.add(inner);
   g.scale.setScalar(r); g.position.set(0,0,0);
   g.userData.rimMat=rim.material; g.userData.diskMat=disk.material; g.userData.innerMat=inner.material;
   g.userData.danger=null;
@@ -1099,18 +1099,30 @@ let placed=[];        // {x,z,r} 이번 라운드 점유 원
 function regOccupy(x,z,r){ placed.push({x,z,r}); }
 function freeSpotNear(x,z,r,gap){
   gap=gap==null?0.5:gap;
-  const hit=(px,pz)=>{ for(const p of placed){ if(Math.hypot(px-p.x,pz-p.z) < p.r+r+gap) return true; } return false; };
-  if(hit(x,z)){
-    const B=(MAP_BOUND||GROUND-2)-1;
-    for(let t=0;t<40;t++){ const nx=rand(-B,B), nz=rand(-B,B); if(!hit(nx,nz)){ x=nx; z=nz; break; } }
+  const B=(MAP_BOUND||GROUND-2)-1;
+  const overlap=(px,pz)=>{ let m=0; for(const p of placed){ const o=(p.r+r+gap)-Math.hypot(px-p.x,pz-p.z); if(o>m)m=o; } return m; };
+  if(overlap(x,z)>0){
+    // 원위치 근처부터 나선형으로 빈자리 탐색(맵 반대편 텔레포트 방지)
+    let best=[x,z], bestOv=overlap(x,z);
+    for(let ring=1; ring<=8; ring++){ const rad=ring*(r+gap+0.4);
+      for(let a=0; a<12; a++){ const ang=(a/12)*Math.PI*2 + ring*0.5;
+        let nx=x+Math.cos(ang)*rad, nz=z+Math.sin(ang)*rad;
+        nx=clamp(nx,-B,B); nz=clamp(nz,-B,B);
+        const ov=overlap(nx,nz);
+        if(ov<=0){ regOccupy(nx,nz,r); return [nx,nz]; }
+        if(ov<bestOv){ bestOv=ov; best=[nx,nz]; }
+      }
+    }
+    x=best[0]; z=best[1];   // 완전 빈자리 없으면 가장 덜 겹치는 근처
   }
   regOccupy(x,z,r); return [x,z];
 }
 /* --- 바닥 구멍: 작으면 덮어 메우고(메꾸기), 나보다 크면 빠진다(실패). kind 있으면 몬스터 생성 --- */
 function addSpawner(x,z,r,kind,interval,mega){
-  r = mega ? r : Math.max(0.3, Math.min(r*HSCALE, 0.68));   // 너무 작은 구멍 키움(최소 0.3) / 메가는 그대로
+  r = mega ? r : Math.max(0.36, Math.min(r*HSCALE, 0.68));   // 최소 0.36(시작 볼 0.3로도 채울 수 있는 한도) / 메가는 그대로
   const sp=freeSpotNear(x,z,r);  x=sp[0]; z=sp[1];   // 다른 구멍·큰 물체와 안 겹치게
   const grp=buildHoleMesh(r); grp.position.set(x,0,z); scene.add(grp);
+  setHoleColor(grp, !(ball.r>=r*0.8));   // 생성 즉시 색 확정(카운트다운 동안 검정 방지)
   spawners.push({ grp,x,z,r,kind,interval:interval||0, t:Math.random()*(interval||1), alive:true, mega:!!mega });
 }
 function fallInRoll(s){
@@ -1421,12 +1433,12 @@ function populateMap(id){
     for(let i=0;i<5;i++) spawnMonster('skeleton',P(),P(),false);
     for(let i=0;i<4;i++) spawnMonster('ghost',P(),P(),false);
     for(let i=0;i<3;i++) spawnMonster('reaper',P(),P(),false);
+    // ⚰️ 저주 불바다 + 포털을 먼저 생성·점유 → 이후 구멍이 그 아래 안 생김
+    for(let i=0;i<3;i++){ const p=Pc(4); addCurseZone(p[0],p[1],rand(2.5,3.8)); }
+    addPortal(rand(-H*0.7,-H*0.3), rand(-H*0.5,H*0.5), rand(H*0.3,H*0.7), rand(-H*0.5,H*0.5));
     for(let i=0;i<14;i++) addSpawner(P(),P(),rand(0.32,0.85),null,0);
     for(let i=0;i<11;i++){ const p=Pc(2.5); const k=['skeleton','ghost','reaper'][i%3]; addSpawner(p[0],p[1],rand(1.0,1.7),k,rand(2.4,3.8)); }
     for(let i=0;i<5;i++) addSpawner(P(),P(),rand(1.55,1.9),null,0);                            // 큰 빠지는 구멍
-    // ⚰️ 저주 안개 구역(체력↓·둔화) + 순간이동 포털
-    for(let i=0;i<3;i++){ const p=Pc(4); addCurseZone(p[0],p[1],rand(2.5,3.8)); }
-    addPortal(rand(-H*0.7,-H*0.3), rand(-H*0.5,H*0.5), rand(H*0.3,H*0.7), rand(-H*0.5,H*0.5));
   }
   // 모든 맵 공통: 작은→큰 성장 사다리 + 빠른 성장용 중간 구멍(증량)
   for(let i=0;i<10;i++){ const p=Pc(2); addSpawner(p[0],p[1], rand(0.8,1.2), null, 0); }
@@ -1524,11 +1536,13 @@ function addCurseZone(x,z,r){
     const core=new THREE.Mesh(new THREE.ConeGeometry(0.12,h*0.6,6),new THREE.MeshBasicMaterial({color:0xffe23a,transparent:true,opacity:0.9,blending:THREE.AdditiveBlending,depthWrite:false,fog:false})); core.position.y=h*0.18; f.add(core);
     f.position.set(x+Math.cos(a)*rr, h*0.4, z+Math.sin(a)*rr); f.renderOrder=3; mapGroup.add(f);
     flames.push({ m:f, baseY:h*0.4, h, ph:Math.random()*6.28, sway:rand(0.6,1.2) }); }
+  if(typeof regOccupy==='function') regOccupy(x,z,r+0.6);   // 구멍이 불바다 아래 안 생기게
   curseZones.push({ x,z,r, disc, ring, flames, cd:0, t:Math.random()*6.28 });
 }
 function addPortal(ax,az,bx,bz){
   function ring(x,z,c){ const t=new THREE.Mesh(new THREE.TorusGeometry(0.7,0.12,10,24),new THREE.MeshPhongMaterial({color:c,emissive:c,emissiveIntensity:0.8})); t.position.set(x,0.7,z); t.rotation.x=Math.PI/2; mapGroup.add(t); return t; }
   const ma=ring(ax,az,0x4fd0f5), mb=ring(bx,bz,0xff7ad0);
+  if(typeof regOccupy==='function'){ regOccupy(ax,az,1.3); regOccupy(bx,bz,1.3); }   // 구멍이 포털 위에 안 생기게
   portals.push({ ax,az,bx,bz, r:0.8, ma, mb });
 }
 function addTrafficCar(ang){
@@ -2553,6 +2567,8 @@ window.__HOLE = {
   spawnerXY(){ return spawners.map(function(s){ return {x:Math.round(s.x*10)/10, z:Math.round(s.z*10)/10, r:Math.round(s.r*100)/100, gx:Math.round(s.grp.position.x*10)/10, gz:Math.round(s.grp.position.z*10)/10}; }); },
   get arrowRot(){ return mapArrow? Math.round(mapArrow.rotation.y*100)/100 : null; },
   get bigObjs(){ return bigObjs.length; }, get bigMinOp(){ var m=1; for(var i=0;i<bigObjs.length;i++) if(bigObjs[i].op<m)m=bigObjs[i].op; return Math.round(m*100)/100; },
+  holeDump(){ return spawners.map(function(s){ var rim=s.grp.userData.rimMat; return {r:Math.round(s.r*100)/100, danger:s.grp.userData.danger, kind:s.kind||null, rimHex:rim?rim.color.getHexString():null, rimRO:s.grp.children[0]?s.grp.children[0].renderOrder:null, y:Math.round(s.grp.position.y*100)/100, visible:s.grp.visible}; }); },
+  mapDecals(){ var out=[]; if(mapGroup) mapGroup.traverse(function(o){ if(o.isMesh && o.position && Math.abs(o.position.y)<0.5){ out.push({ y:Math.round(o.position.y*1000)/1000, ro:o.renderOrder, op:o.material&&o.material.opacity!=null?Math.round(o.material.opacity*100)/100:1, geo:o.geometry?o.geometry.type:'' }); } }); return out.slice(0,60); },
   get hp(){ return Math.round(ball.hp); }, get chopper(){ return !!chopper; }, get bombs(){ return bombs.length; },
   get attackTimer(){ return Math.round(attackTimer*10)/10; }, forceBomb(){ attackTimer=0.001; },
   fallTest(){   // 나보다 큰 구멍으로 이동 후 1스텝 → 빠짐(finish) 발동 확인
