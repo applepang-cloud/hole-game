@@ -32,7 +32,6 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
-  google_mobile_ads: ^9.0.0
   webview_flutter: ^4.10.0
 
 dev_dependencies:
@@ -61,6 +60,7 @@ flutter:
     - assets/portraits/
     - assets/backgrounds/
     - web/game/index.html
+    - web/game/three.min.js
     - web/game/music/
 
   # To add assets to your application, add an assets section, like this:
