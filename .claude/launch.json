@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "hole",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["http-server", "build/web", "-p", "8865", "--cors", "-c-1"],
+      "port": 8865
+    }
+  ]
+}

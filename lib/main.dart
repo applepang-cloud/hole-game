@@ -58,7 +58,13 @@ const kEventModes = <GameMode>[
   GameMode('hole', '⚫', '구멍 빨아들이기', '구멍으로 물건을 쏙쏙 삼킨다', Color(0xFF3A3550)),
 ];
 
-GameMode _modeById(String id) => [...kMaps, ...kEventModes]
+const kEventModes2 = <GameMode>[
+  GameMode('exmap1', '👻', '귀신 나오는 방', '창밖·TV에서 유령이 기어나온다! 마법진으로 퇴마', Color(0xFF4A1A6A)),
+  GameMode('exmap2', '⛪', '성당 내부', '성당에 악령이 들었다! 마법진 볼로 모두 봉인하라', Color(0xFF7A3A1A)),
+  GameMode('exmap3', '🏰', '드라큐라 성', '드라큐라의 성에 잠입! 관과 악령을 모두 굴려버려라', Color(0xFF4A0A5A)),
+];
+
+GameMode _modeById(String id) => [...kMaps, ...kEventModes, ...kEventModes2]
     .firstWhere((m) => m.id == id, orElse: () => kMaps.first);
 
 /// 스토리 컷씬 대사 한 줄 (left=화면 왼쪽 NPC / 오른쪽=주인공 퇴마사)
@@ -183,7 +189,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _paused = false; // 일시정지 여부
   double _sensitivity = 1.0; // 볼 민감도(기본 1.0)
 
-  String _screen = 'home'; // 'home' | 'story' | 'event' (플레이/대사 아닐 때)
+  String _screen = 'home'; // 'home' | 'story' | 'event' | 'event2' (플레이/대사 아닐 때)
   bool _storyMode = false; // 현재 진행이 스토리인지
   Set<int> _cleared = {}; // 클리어한 맵 번호
   int? _fingerMap; // 스토리 리스트에서 손가락으로 가리킬 맵 번호
@@ -423,12 +429,21 @@ class _HomeScreenState extends State<HomeScreen> {
           onBack: () => setState(() => _screen = 'home'),
         )),
       );
+    } else if (_screen == 'event2') {
+      content = KeyedSubtree(
+        key: const ValueKey('event2'),
+        child: _withBackdrop(_Event2Select(
+          onPlay: _play,
+          onBack: () => setState(() => _screen = 'home'),
+        )),
+      );
     } else {
       content = KeyedSubtree(
         key: const ValueKey('home'),
         child: _withBackdrop(_HomeMenu(
           onStory: () => setState(() => _screen = 'story'),
           onEvent: () => setState(() => _screen = 'event'),
+          onEvent2: () => setState(() => _screen = 'event2'),
         )),
       );
     }
@@ -936,10 +951,10 @@ class _GameInputLayerState extends State<_GameInputLayer> {
   }
 }
 
-/// 홈 메뉴 = 스토리 / 이벤트 두 버튼
+/// 홈 메뉴 = 스토리 / 이벤트 / 이벤트2(퇴마) 세 버튼
 class _HomeMenu extends StatelessWidget {
-  const _HomeMenu({required this.onStory, required this.onEvent});
-  final VoidCallback onStory, onEvent;
+  const _HomeMenu({required this.onStory, required this.onEvent, required this.onEvent2});
+  final VoidCallback onStory, onEvent, onEvent2;
 
   @override
   Widget build(BuildContext context) {
@@ -965,7 +980,9 @@ class _HomeMenu extends StatelessWidget {
           const SizedBox(height: 40),
           _bigMenu('📖', '스토리', '맵을 순서대로 모험', const Color(0xFFEF5D1E), onStory),
           const SizedBox(height: 16),
-          _bigMenu('🎪', '이벤트', '다른 방식 게임 2종', const Color(0xFF3A3550), onEvent),
+          _bigMenu('🎪', '이벤트', '공굴리기·쇠똥구리·눈사람', const Color(0xFF3A3550), onEvent),
+          const SizedBox(height: 16),
+          _bigMenu('🔮', '이벤트2 · 퇴마', '귀신방·성당·드라큘라성', const Color(0xFF4A0A5A), onEvent2),
         ],
       ),
     );
@@ -1129,7 +1146,7 @@ class _FingerHintState extends State<_FingerHint> with SingleTickerProviderState
   }
 }
 
-/// 이벤트 = 2개 게임 모드 선택
+/// 이벤트 = 5개 게임 모드 선택
 class _EventSelect extends StatelessWidget {
   const _EventSelect({required this.onPlay, required this.onBack});
   final void Function(String mode) onPlay;
@@ -1146,12 +1163,50 @@ class _EventSelect extends StatelessWidget {
       ]),
       const Padding(
         padding: EdgeInsets.only(bottom: 10),
-        child: Text('두 가지 방식 중 골라봐!', style: TextStyle(fontSize: 13, color: Colors.white70)),
+        child: Text('공굴리기·쇠똥구리·눈사람!', style: TextStyle(fontSize: 13, color: Colors.white70)),
       ),
       for (final m in kEventModes)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           child: _ModeCard(mode: m, onTap: () => onPlay(m.id)),
+        ),
+    ]);
+  }
+}
+
+/// 이벤트2 = 퇴마사 3맵 선택
+class _Event2Select extends StatelessWidget {
+  const _Event2Select({required this.onPlay, required this.onBack});
+  final void Function(String mode) onPlay;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      const SizedBox(height: 8),
+      Row(children: [
+        IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back, color: Colors.white)),
+        const Text('🔮 이벤트2 · 퇴마',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white)),
+      ]),
+      const Padding(
+        padding: EdgeInsets.only(bottom: 6),
+        child: Text('마법진 볼로 악령을 굴려버려라!',
+            style: TextStyle(fontSize: 13, color: Colors.white70)),
+      ),
+      const Padding(
+        padding: EdgeInsets.only(bottom: 10),
+        child: Text('✋ 손이 마법진 볼을 굴린다  🙏 기도  🤙 무드라 제스처',
+            style: TextStyle(fontSize: 11, color: Colors.white54)),
+      ),
+      for (final m in kEventModes2)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          child: _ModeCard(
+            mode: m,
+            onTap: () => onPlay(m.id),
+            darkBg: true,
+          ),
         ),
     ]);
   }
@@ -1348,16 +1403,17 @@ class _DialogueOverlayState extends State<_DialogueOverlay>
 }
 
 class _ModeCard extends StatelessWidget {
-  const _ModeCard({required this.mode, required this.onTap});
+  const _ModeCard({required this.mode, required this.onTap, this.darkBg = false});
   final GameMode mode;
   final VoidCallback onTap;
+  final bool darkBg;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 300,
       child: Material(
-        color: const Color(0xFFFFF7E6),
+        color: darkBg ? const Color(0xFF1A0A2A) : const Color(0xFFFFF7E6),
         borderRadius: BorderRadius.circular(16),
         elevation: 4,
         child: InkWell(
@@ -1383,14 +1439,15 @@ class _ModeCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(mode.title,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w800,
-                              color: Color(0xFF4A3B2A))),
+                              color: darkBg ? Colors.white : const Color(0xFF4A3B2A))),
                       const SizedBox(height: 2),
                       Text(mode.desc,
-                          style: const TextStyle(
-                              fontSize: 11.5, color: Color(0xFF9B8A72))),
+                          style: TextStyle(
+                              fontSize: 11.5,
+                              color: darkBg ? Colors.white54 : const Color(0xFF9B8A72))),
                     ],
                   ),
                 ),

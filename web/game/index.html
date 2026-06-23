@@ -562,7 +562,57 @@ function buildBlueBall(){
   blueCore = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 2),
     new THREE.MeshPhongMaterial({ color:0x3f86e0, flatShading:true, shininess:48, specular:0x9fd0ff }));
   blueCore.castShadow = true; blueBall.add(blueCore);
+  // 퇴마 이벤트2 마법진 링 3개 + 룬 점 (EX_MAP>0 일 때만 visible)
+  const exDecor = new THREE.Group();
+  const rinMat = ()=> new THREE.MeshBasicMaterial({color:0xbb55ff,transparent:true,opacity:0.78,side:THREE.DoubleSide,depthWrite:false,fog:false});
+  for(let i=0;i<3;i++){
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(1.04,0.022,6,28),rinMat());
+    ring.rotation.x=i*Math.PI/3; ring.rotation.y=i*Math.PI/4;
+    exDecor.add(ring);
+  }
+  const dotMat=new THREE.MeshBasicMaterial({color:0xee99ff,fog:false});
+  for(let i=0;i<8;i++){
+    const dot=new THREE.Mesh(new THREE.SphereGeometry(0.035,5,4),dotMat.clone());
+    const a=i/8*Math.PI*2, b=(i%2?0.55:-0.55), r=Math.sqrt(1-b*b);
+    dot.position.set(Math.cos(a)*r*1.05,b*1.05,Math.sin(a)*r*1.05);
+    exDecor.add(dot);
+  }
+  exDecor.visible=false; blueBall.add(exDecor);
+  blueBall.userData.exDecor=exDecor;
   blueBall.visible=false; scene.add(blueBall);
+}
+// 퇴마 손 모델 생성 (scene-level, 볼 따라다님)
+function buildExorcistHand(){
+  const g=new THREE.Group();
+  const sk=0xf0c884;
+  function S(c,shin){ return new THREE.MeshPhongMaterial({color:c||sk,flatShading:true,shininess:shin||14}); }
+  function fing(len,r,col){ const f=new THREE.Group();
+    for(let i=0;i<2;i++){ const seg=new THREE.Mesh(new THREE.CylinderGeometry(r*(1-i*0.15),r,len/2,5),S(col||0xecc07c));
+      seg.position.y=len/2*(i+0.5); f.add(seg); } return f; }
+  // ===== ROLL: 손바닥 위로 볼 받치는 모양 =====
+  const roll=new THREE.Group();
+  const rP=new THREE.Mesh(new THREE.SphereGeometry(0.36,10,8),S(sk)); rP.scale.set(1.55,0.46,1.18); rP.position.y=0.11; roll.add(rP);
+  const rTh=new THREE.Mesh(new THREE.CylinderGeometry(0.046,0.065,0.22,5),S(0xecc07c)); rTh.position.set(-0.42,0.18,0.1); rTh.rotation.z=Math.PI/3; roll.add(rTh);
+  for(let i=0;i<4;i++){ const f=fing(0.3-i*0.018,0.04); f.position.set(-0.24+i*0.16,0.11,-0.3); f.rotation.x=Math.PI/7; roll.add(f); }
+  g.add(roll);
+  // ===== PRAYER: 두 손 합장 =====
+  const prayer=new THREE.Group();
+  for(const sx of[-1,1]){
+    const ph=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.6,0.36),S(sk)); ph.position.set(sx*0.09,0.31,0); prayer.add(ph);
+    for(let i=0;i<5;i++){ const fn=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.038,0.28,5),S(0xecc07c)); fn.position.set(sx*0.075,0.74,-0.15+i*0.075); prayer.add(fn); }
+    const thumb=new THREE.Mesh(new THREE.CylinderGeometry(0.036,0.046,0.2,5),S(0xecc07c)); thumb.position.set(sx*0.18,0.56,0.1); thumb.rotation.z=sx*(Math.PI*0.3); prayer.add(thumb);
+  }
+  prayer.visible=false; g.add(prayer);
+  // ===== MUDRA: 검지·중지 하늘 향해, 나머지 접기 =====
+  const mudra=new THREE.Group();
+  const mP=new THREE.Mesh(new THREE.SphereGeometry(0.33,10,8),S(sk)); mP.scale.set(1.48,0.46,1.12); mP.position.y=0.11; mudra.add(mP);
+  [[-0.08,0],[0.1,0]].forEach(([x])=>{ const f=fing(0.38,0.042); f.position.set(x,0.11,-0.22); mudra.add(f); });
+  [[0.28,Math.PI*0.46],[0.42,Math.PI*0.5]].forEach(([x,rx])=>{ const f=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.046,0.22,5),S(0xecc07c)); f.position.set(x,0.2,0.06); f.rotation.x=rx; mudra.add(f); });
+  const mTh=new THREE.Mesh(new THREE.CylinderGeometry(0.048,0.062,0.2,5),S(0xecc07c)); mTh.position.set(-0.38,0.16,0.08); mTh.rotation.z=Math.PI*0.36; mudra.add(mTh);
+  mudra.visible=false; g.add(mudra);
+  g.userData.poses={roll,prayer,mudra};
+  g.visible=false; scene.add(g);
+  return g;
 }
 function buildHoleMesh(r){
   const g=new THREE.Group();
@@ -827,6 +877,8 @@ function populate(){
 
 /* ===================== 맵(테마 레벨) 시스템 ===================== */
 let MAP=0, MAP_BOUND=GROUND-2, mapGroup=null, windowGhost=null, ambT=0, ballSink=null, holeTotal=0;
+let EX_MAP=0;   // 퇴마 이벤트2: 0=아님 1=귀신방 2=성당 3=드라큐라성
+let exHandGroup=null, exHandPose='roll', exHandT=0, exHandDur=0;
 let monsters=[], splats=[], spawners=[];
 let chopper=null, chopperT=0, attackTimer=0, bombs=[], hurtT=0;
 const MONSTER_CAP=34, FLATTEN_RATIO=0.8, AIR_ATTACK_EVERY=30;   // 공중 공격 주기(초)
@@ -1008,7 +1060,7 @@ function buildWindowGhost(){ const grp=new THREE.Group();
   grp.userData.mats=[m,em]; return grp; }
 
 /* 맵(파란 볼)/일반 롤 공통 성장 반영 */
-function refreshActive(){ if(MAP>0) refreshBlue(); else refreshBall(); }
+function refreshActive(){ if(MAP>0||EX_MAP>0) refreshBlue(); else refreshBall(); }
 
 /* --- 납작(squash) → 펑 연출 --- */
 function addFlat(grp,x,z,sc){
@@ -1292,6 +1344,10 @@ const LIGHTING={
   city:{ clear:0xbcc4cf, fog:0xbcc4cf, fogN:55, fogF:150, sunC:0xeef0f4, sunI:0.5, sunP:[14,32,10], hemiS:0xcdd6e0, hemiG:0x7a7f86, hemiI:0.55, amb:0.03, fillI:0.16, rimI:0.0, pts:[[0xffcf80,0.6,16,-7,3.2,-4,0.05],[0xffcf80,0.6,16,7,3.2,5,0.05]] },
   grave:{ clear:0x14121f, fog:0x191626, fogN:20, fogF:62, sunC:0x9fb0d0, sunI:0.28, sunP:[-10,30,-14], hemiS:0x2a2740, hemiG:0x12160f, hemiI:0.32, amb:0.04, fillI:0.08, rimI:0.12, pts:[[0x7af0d0,1.0,15,-6,1.4,4,0.6],[0x9a7af5,0.9,15,7,1.4,-3,0.6],[0x7af0d0,0.8,14,2,1.2,-8,0.6]] },
   snow:{ clear:0x0a1430, fog:0x18255a, fogN:55, fogF:155, sunC:0xcfe0ff, sunI:0.45, sunP:[-12,32,-10], hemiS:0x4a6cff, hemiG:0x9fb8d8, hemiI:0.5, amb:0.04, fillI:0.14, rimI:0.12, pts:[[0x49f5b0,0.5,42,-10,16,-18,0.25],[0x4fd0f5,0.5,42,8,16,-18,0.25]] },
+  // 퇴마 이벤트2 조명 프리셋
+  haunted:{ clear:0x10081c, fog:0x10081c, fogN:14, fogF:45, sunC:0x3a2050, sunI:0.18, sunP:[6,20,6], hemiS:0x3a0a5a, hemiG:0x1a0a20, hemiI:0.28, amb:0.06, fillI:0.08, rimI:0.06, pts:[[0x5a00ff,0.6,18,-2,4,0,0.1],[0xcc44ff,0.5,12,2,3.5,0,0.08]] },
+  cathedral:{ clear:0x1a1014, fog:0x1a1014, fogN:22, fogF:58, sunC:0x9070c0, sunI:0.22, sunP:[0,28,0], hemiS:0x4a3060, hemiG:0x200a18, hemiI:0.3, amb:0.07, fillI:0.09, rimI:0.07, pts:[[0xffcc44,0.7,20,0,6,-16,0.1],[0x3355ff,0.4,14,0,5,0,0.09]] },
+  dracula:{ clear:0x06030c, fog:0x08040f, fogN:12, fogF:40, sunC:0x1a0a30, sunI:0.12, sunP:[0,18,0], hemiS:0x220844, hemiG:0x0a0310, hemiI:0.22, amb:0.04, fillI:0.06, rimI:0.05, pts:[[0xff3a00,0.8,16,-8,4,0,0.08],[0x9900cc,0.6,14,8,4,0,0.08]] },
 };
 function setMapLighting(theme){
   const L=LIGHTING[theme]||LIGHTING.default;
@@ -1443,6 +1499,225 @@ function populateMap(id){
   // 모든 맵 공통: 작은→큰 성장 사다리 + 빠른 성장용 중간 구멍(증량)
   for(let i=0;i<10;i++){ const p=Pc(2); addSpawner(p[0],p[1], rand(0.8,1.2), null, 0); }
 }
+
+/* =====================================================================
+   이벤트2 퇴마 맵 (EX_MAP 1-3)
+   ===================================================================== */
+
+/* --- 소품 빌더 --- */
+function buildTV(){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1.6,1.1,0.22),MAT(0x1a1824,20));
+  body.position.y=0.72; g.add(body);
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(1.38,0.88),new THREE.MeshBasicMaterial({color:0x2244bb,fog:false}));
+  scr.position.set(0,0.72,0.12); g.add(scr);
+  const gF=buildWindowGhost(); gF.scale.setScalar(0.32);
+  gF.userData.mats[0].opacity=0.75; gF.userData.mats[1].opacity=0.75; // 화면에 유령 고정 표시
+  gF.position.set(0,0.72,0.13); g.add(gF);
+  const gl=new THREE.PointLight(0x4466ee,1.0,5.5); gl.position.set(0,0.72,0.55); g.add(gl);
+  for(const sx of[-0.5,0.5]){ const leg=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.36,0.28),MAT(0x141420)); leg.position.set(sx,0.18,0.04); g.add(leg); }
+  addShadow(g,1.0); return tag(g,1.0,0);
+}
+function buildPew(){
+  const g=new THREE.Group();
+  const seat=new THREE.Mesh(new THREE.BoxGeometry(3.4,0.14,0.64),MAT(0x3a2418)); seat.position.y=0.65; g.add(seat);
+  const back=new THREE.Mesh(new THREE.BoxGeometry(3.4,0.78,0.1),MAT(0x2e1a10)); back.position.set(0,1.06,-0.27); g.add(back);
+  for(const sx of[-1.5,0,1.5]){ const leg=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.65,0.6),MAT(0x2a1a10)); leg.position.set(sx,0.33,0); g.add(leg); }
+  addShadow(g,2.0); return tag(g,1.8,0);
+}
+function buildCoffin(){
+  const g=new THREE.Group();
+  const box=new THREE.Mesh(new THREE.BoxGeometry(0.82,0.42,2.0),MAT(0x1a0c18)); box.position.y=0.21; g.add(box);
+  const lid=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.1,2.0),MAT(0x2a1422)); lid.position.y=0.43; g.add(lid);
+  const cV=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.015,0.44),MAT(0x996644)); cV.position.set(0,0.49,0.1); g.add(cV);
+  const cH=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.015,0.06),MAT(0x996644)); cH.position.set(0,0.49,0.26); g.add(cH);
+  const glo=new THREE.PointLight(0x9900cc,0.55,4,2); glo.position.y=0.55; g.add(glo);
+  addShadow(g,1.0); return tag(g,1.2,0);
+}
+function buildArmorStand(){
+  const g=new THREE.Group(); const c=0x4a5060;
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(0.24,0.28,0.12,8),MAT(c)); base.position.y=0.06; g.add(base);
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.09,1.0,6),MAT(0x3a4050)); pole.position.y=0.62; g.add(pole);
+  const torso=new THREE.Mesh(new THREE.BoxGeometry(0.54,0.64,0.27),MAT(c)); torso.position.y=1.26; g.add(torso);
+  const helm=new THREE.Mesh(new THREE.SphereGeometry(0.21,9,7),MAT(c)); helm.position.y=1.86; helm.scale.set(1,1.14,0.9); g.add(helm);
+  const vis=new THREE.Mesh(new THREE.BoxGeometry(0.27,0.06,0.21),MAT(0x202628)); vis.position.set(0,1.80,0.14); g.add(vis);
+  for(const sx of[-1,1]){
+    const sh=new THREE.Mesh(new THREE.SphereGeometry(0.15,8,7),MAT(c)); sh.position.set(sx*0.37,1.36,0); sh.scale.set(1.5,0.7,1.0); g.add(sh);
+    const arm=new THREE.Mesh(new THREE.CylinderGeometry(0.065,0.09,0.52,6),MAT(c)); arm.position.set(sx*0.41,1.06,0); g.add(arm);
+  }
+  addShadow(g,0.38); return tag(g,0.32,0);
+}
+function buildBigBookcase(){
+  const g=new THREE.Group(); const c=0x2a1c14;
+  const back=new THREE.Mesh(new THREE.BoxGeometry(2.4,3.0,0.16),MAT(c)); back.position.y=1.5; g.add(back);
+  for(let i=0;i<3;i++){ const sh=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.1,0.38),MAT(0x3a2c1c)); sh.position.set(0,0.7+i*0.95,0.1); g.add(sh); }
+  const bkC=[0x8a1010,0x104080,0x1a6030,0x604010,0x501860,0x7a4020,0x104060];
+  for(let bi=0;bi<14;bi++){
+    const bk=new THREE.Mesh(new THREE.BoxGeometry(0.11+Math.random()*0.08,0.54+Math.random()*0.18,0.28),MAT(bkC[bi%bkC.length]));
+    bk.position.set(-0.98+bi*0.163, 0.94+Math.floor(bi/5)*0.95, 0.1); g.add(bk);
+  }
+  addShadow(g,1.3); return tag(g,1.3,0);
+}
+function buildCathedralCandle(){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.046,0.052,0.52,8),new THREE.MeshPhongMaterial({color:0xf0e8c8,flatShading:true})); body.position.y=0.26; g.add(body);
+  const flame=new THREE.Mesh(new THREE.ConeGeometry(0.038,0.13,5),new THREE.MeshBasicMaterial({color:0xffde88,fog:false})); flame.position.y=0.58; g.add(flame);
+  const glo=new THREE.PointLight(0xffdd88,0.42,4,2); glo.position.y=0.68; g.add(glo);
+  return g;
+}
+
+/* --- 환경 빌더 --- */
+function buildExWorld(v){
+  if(mapGroup) scene.remove(mapGroup);
+  mapGroup=new THREE.Group(); scene.add(mapGroup); windowGhost=null; mapWalls=[];
+  const H=[0,14,18,20][v], wC=[0,0x1e1528,0x302828,0x1a1422][v], fC=[0,0x1a1215,0x2a2420,0x16121a][v];
+  const lC=[0,0x2a1828,0x3a2e2a,0x241828][v], wH=[0,7,10,12][v];
+  const flMat=new THREE.MeshPhongMaterial({color:fC,shininess:5});
+  const fl=new THREE.Mesh(new THREE.PlaneGeometry(H*2,H*2),flMat); fl.rotation.x=-Math.PI/2; fl.receiveShadow=true; mapGroup.add(fl);
+  for(let i=-H+2;i<H;i+=4){ const ln=new THREE.Mesh(new THREE.PlaneGeometry(H*2,0.1),new THREE.MeshBasicMaterial({color:lC,transparent:true,opacity:0.45})); ln.rotation.x=-Math.PI/2; ln.position.set(0,0.011,i); mapGroup.add(ln); }
+  const T=0.8;
+  [[0,-H,H*2,T,0,-1],[0,H,H*2,T,0,1],[-H,0,T,H*2,-1,0],[H,0,T,H*2,1,0]].forEach(([x,z,w,d,nx,nz])=>{
+    const wall=new THREE.Mesh(new THREE.BoxGeometry(w,wH,d),new THREE.MeshPhongMaterial({color:wC,flatShading:true,shininess:2}));
+    wall.position.set(x,wH/2,z); mapGroup.add(wall); mapWalls.push({mesh:wall,nx,nz,lim:H});
+  });
+  if(v===1) buildHauntedDeco(H);
+  else if(v===2) buildCathedralDeco(H);
+  else buildDraculaDeco(H);
+}
+function buildHauntedDeco(H){
+  // 창문 + 창문 유령
+  const win=new THREE.Mesh(new THREE.PlaneGeometry(4.5,2.8),new THREE.MeshBasicMaterial({color:0x050810})); win.position.set(0,3.2,-H+0.46); mapGroup.add(win);
+  const frame=new THREE.Mesh(new THREE.PlaneGeometry(5.0,3.32),new THREE.MeshBasicMaterial({color:0x3a2c44})); frame.position.set(0,3.2,-H+0.45); mapGroup.add(frame);
+  const wg=buildWindowGhost(); wg.position.set(0,3.2,-H+0.52); mapGroup.add(wg); windowGhost=wg;
+  // 측면 창문
+  const win2=new THREE.Mesh(new THREE.PlaneGeometry(3,2.4),new THREE.MeshBasicMaterial({color:0x050810})); win2.position.set(H-0.46,3.0,rand(-H*0.3,H*0.3)); win2.rotation.y=Math.PI/2; mapGroup.add(win2);
+  const fr2=new THREE.Mesh(new THREE.PlaneGeometry(3.4,2.8),new THREE.MeshBasicMaterial({color:0x3a2c44})); fr2.position.copy(win2.position); fr2.position.x-=0.01; fr2.rotation.y=Math.PI/2; mapGroup.add(fr2);
+  // 커튼
+  for(const cx of[-3.6,3.6]){ const c=new THREE.Mesh(new THREE.PlaneGeometry(1.8,4.5),new THREE.MeshPhongMaterial({color:0x2a0838,flatShading:true,side:THREE.DoubleSide})); c.position.set(cx,2.25,-H+0.62); mapGroup.add(c); }
+  // 거울 프레임
+  const mf=new THREE.Mesh(new THREE.BoxGeometry(1.55,2.1,0.08),MAT(0x6a5030)); mf.position.set(-H+0.62,1.5,rand(-3,3)); mf.rotation.y=Math.PI/2; mapGroup.add(mf);
+  const mir=new THREE.Mesh(new THREE.PlaneGeometry(1.28,1.85),new THREE.MeshBasicMaterial({color:0x4a88b0,transparent:true,opacity:0.62})); mir.position.copy(mf.position); mir.position.x+=0.06; mir.rotation.y=Math.PI/2; mapGroup.add(mir);
+}
+function buildCathedralDeco(H){
+  // 스테인드글라스 창 + 고딕 아치
+  const wColors=[0xff4400,0x3366ff,0xffaa00,0x8800cc];
+  for(let i=0;i<2;i++) for(const xs of[-1,1]){
+    const z=-H*0.4+i*H*0.8, x=(H-0.5)*xs, wc=wColors[i*2+(xs>0?1:0)];
+    const glass=new THREE.Mesh(new THREE.PlaneGeometry(1.55,3.0),new THREE.MeshBasicMaterial({color:wc,transparent:true,opacity:0.52,side:THREE.DoubleSide,depthWrite:false}));
+    glass.position.set(x+(xs*0.04),4.3,z); glass.rotation.y=Math.PI/2; mapGroup.add(glass);
+    const aL=new THREE.PointLight(wc,0.65,12,2); aL.position.set(x+(xs*2.0),4.3,z); mapGroup.add(aL);
+  }
+  // 십자가 (뒤 벽)
+  const cV=new THREE.Mesh(new THREE.BoxGeometry(0.38,3.4,0.18),MAT(0x6a4820)); cV.position.set(0,5.2,-H+0.52); mapGroup.add(cV);
+  const cH=new THREE.Mesh(new THREE.BoxGeometry(1.78,0.38,0.18),MAT(0x6a4820)); cH.position.set(0,6.0,-H+0.52); mapGroup.add(cH);
+  const cgl=new THREE.PointLight(0xfff0d0,0.75,10,2); cgl.position.set(0,5.5,-H+2); mapGroup.add(cgl);
+  // 제단
+  const alt=new THREE.Mesh(new THREE.BoxGeometry(4.0,1.2,1.5),MAT(0x3a2820)); alt.position.set(0,0.6,-H+2.2); mapGroup.add(alt);
+  const altT=new THREE.Mesh(new THREE.BoxGeometry(4.4,0.12,1.7),MAT(0x5a4030)); altT.position.set(0,1.26,-H+2.2); mapGroup.add(altT);
+  // 촛대 (제단 위)
+  for(let ci=-1.5;ci<=1.5;ci+=1){ const c=buildCathedralCandle(); c.position.set(ci,1.27,-H+1.8); mapGroup.add(c); }
+  // 기둥
+  for(const xs of[-1,1]) for(let pi=0;pi<2;pi++){
+    const col=new THREE.Mesh(new THREE.CylinderGeometry(0.44,0.5,8,8),MAT(0x3a3228)); col.position.set((H-2)*xs,4,-H*0.3+pi*(H*0.6)); mapGroup.add(col);
+  }
+}
+function buildDraculaDeco(H){
+  // 천장 고딕 아치 리브
+  for(let i=0;i<3;i++) for(const xs of[-1,1]){
+    const rib=new THREE.Mesh(new THREE.TorusGeometry(H*0.88,0.2,5,16,Math.PI*0.62),new THREE.MeshPhongMaterial({color:0x282028,flatShading:true}));
+    rib.position.set(H*0.48*xs,9,-H*0.4+i*(H*0.4)); rib.rotation.set(0,0,xs*(Math.PI*0.5)*0.65); mapGroup.add(rib);
+  }
+  // 철창 창문
+  const wGl=new THREE.Mesh(new THREE.PlaneGeometry(3,3.8),new THREE.MeshBasicMaterial({color:0x1a0a28,transparent:true,opacity:0.88})); wGl.position.set(-H+0.5,5,0); wGl.rotation.y=Math.PI/2; mapGroup.add(wGl);
+  for(let bi=0;bi<5;bi++){ const bar=new THREE.Mesh(new THREE.BoxGeometry(0.09,3.8,0.12),MAT(0x302030)); bar.position.set(-H+0.5,5,-1.2+bi*0.6); mapGroup.add(bar); }
+  // 횃불 벽 조명 (장식, 별도 PointLight는 setMapLighting preset으로 대체)
+  const tPos=[[-H+0.4,3.5,-H*0.5],[H-0.4,3.5,-H*0.5],[-H+0.4,3.5,H*0.5],[H-0.4,3.5,H*0.5],[0,3.5,-H+0.4]];
+  for(const [tx,ty,tz] of tPos){
+    const bracket=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.08,0.32),MAT(0x2c2428)); bracket.position.set(tx,ty,tz); mapGroup.add(bracket);
+    const holder=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.07,0.32,6),MAT(0x2c2024)); holder.position.set(tx,ty+0.16,tz); mapGroup.add(holder);
+    const flame=new THREE.Mesh(new THREE.ConeGeometry(0.09,0.26,6),new THREE.MeshBasicMaterial({color:0xff7a18,fog:false})); flame.position.set(tx,ty+0.4,tz); mapGroup.add(flame);
+    const fC=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.18,6),new THREE.MeshBasicMaterial({color:0xffee88,fog:false})); fC.position.set(tx,ty+0.44,tz); mapGroup.add(fC);
+    const tL=new THREE.PointLight(0xff6a18,0.88,9,2); tL.position.set(tx,ty+0.6,tz); mapGroup.add(tL);
+  }
+  // 균열 바닥 선
+  for(let i=0;i<8;i++){
+    const cr=new THREE.Mesh(new THREE.PlaneGeometry(rand(1.5,3.8),0.06),new THREE.MeshBasicMaterial({color:0x0a080c,transparent:true,opacity:0.8}));
+    cr.rotation.x=-Math.PI/2; cr.rotation.z=Math.random()*Math.PI; cr.position.set(rand(-H*0.8,H*0.8),0.012,rand(-H*0.8,H*0.8)); mapGroup.add(cr);
+  }
+}
+
+/* --- 퇴마 맵 오브젝트 배치 --- */
+function populateExMap(v){
+  const H=MAP_BOUND;
+  const P=()=>rand(-H,H);
+  const Pc=(mr)=>{ let x,z,t=0; do{x=rand(-H+2,H-2);z=rand(-H+2,H-2);t++;}while(Math.hypot(x,z)<(mr||0)&&t<24); return [x,z]; };
+  const flat=(fn,n,mr,a,b)=>{ for(let i=0;i<n;i++){ const p=Pc(mr||0); addFlat(fn(),p[0],p[1],rand(a||0.85,b||1.2)); } };
+  // 공통 작은 소품
+  for(let i=0;i<35;i++){ const mk=SMALL_MAKERS[(Math.random()*SMALL_MAKERS.length)|0]; addProp(mk(),P(),P(),rand(0.7,1.7)); }
+  if(v===1){ // 귀신 나오는 방
+    flat(buildBed,2,2.5,0.85,1.2); flat(buildDesk,3,2,0.85,1.3);
+    flat(buildChair,4,1.5,0.85,1.3); flat(buildLamp,3,1.5,0.85,1.2);
+    flat(buildBookStack,5,0,0.8,1.7); flat(buildFan,2,1.5,0.85,1.0);
+    flat(buildTV,3,2,1.0,1.0);     // TV (유령 화면)
+    for(let i=0;i<5;i++) spawnMonster('ghost',P(),P(),false);
+    for(let i=0;i<12;i++) addSpawner(P(),P(),rand(0.32,0.85),null,0);
+    for(let i=0;i<8;i++){ const p=Pc(2); addSpawner(p[0],p[1],rand(0.9,1.5),'ghost',rand(3,5)); }
+    for(let i=0;i<3;i++) addSpawner(P(),P(),rand(1.4,1.78),null,0);
+    for(let i=0;i<2;i++){ const p=Pc(3); addSpawner(p[0],p[1],rand(0.85,1.1),null,0,true); }
+  } else if(v===2){ // 성당
+    flat(buildPew,10,2,1.0,1.0); flat(buildDesk,2,2,0.9,1.2);
+    flat(buildBookStack,4,0,0.85,1.6); flat(buildLamp,3,1.5,0.85,1.1);
+    for(let i=0;i<5;i++) spawnMonster('skeleton',P(),P(),false);
+    for(let i=0;i<4;i++) spawnMonster('ghost',P(),P(),false);
+    for(let i=0;i<13;i++) addSpawner(P(),P(),rand(0.32,0.85),null,0);
+    for(let i=0;i<9;i++){ const p=Pc(2.5); addSpawner(p[0],p[1],rand(0.9,1.6),i%2?'skeleton':'ghost',rand(2.8,4.5)); }
+    for(let i=0;i<4;i++) addSpawner(P(),P(),rand(1.5,1.82),null,0);
+    for(let i=0;i<2;i++){ const p=Pc(3); addSpawner(p[0],p[1],rand(0.9,1.1),null,0,true); }
+  } else { // 드라큐라 성
+    flat(buildCoffin,4,2,1.0,1.0); flat(buildArmorStand,2,2,1.0,1.0);
+    flat(buildBigBookcase,2,2,1.0,1.0); flat(buildDeadTree,3,1.5,0.85,1.2);
+    flat(buildTorch,4,1.5,0.85,1.1); flat(buildGravestone,4,1.5,0.85,1.0);
+    for(let i=0;i<4;i++) spawnMonster('reaper',P(),P(),false);
+    for(let i=0;i<4;i++) spawnMonster('ghost',P(),P(),false);
+    for(let i=0;i<3;i++) spawnMonster('skeleton',P(),P(),false);
+    for(let i=0;i<15;i++) addSpawner(P(),P(),rand(0.32,0.85),null,0);
+    for(let i=0;i<10;i++){ const p=Pc(2.5); const k=['reaper','ghost','skeleton'][i%3]; addSpawner(p[0],p[1],rand(1.0,1.7),k,rand(2.4,3.8)); }
+    for(let i=0;i<4;i++) addSpawner(P(),P(),rand(1.55,1.88),null,0);
+    for(let i=0;i<3;i++){ const p=Pc(3); addSpawner(p[0],p[1],rand(0.9,1.1),null,0,true); }
+  }
+  for(let i=0;i<10;i++){ const p=Pc(2); addSpawner(p[0],p[1],rand(0.8,1.2),null,0); }
+}
+
+/* --- 퇴마 손 업데이트 --- */
+function updateExHand(dt){
+  if(!exHandGroup || !EX_MAP) return;
+  exHandT+=dt;
+  if(exHandT>exHandDur){
+    const poses=exHandGroup.userData.poses;
+    if(poses[exHandPose]) poses[exHandPose].visible=false;
+    const r=Math.random();
+    exHandPose = r<0.60?'roll': r<0.80?'prayer':'mudra';
+    if(poses[exHandPose]) poses[exHandPose].visible=true;
+    exHandT=0;
+    exHandDur = exHandPose==='roll'?rand(4,8): exHandPose==='prayer'?rand(2,3.5):rand(1.5,2.5);
+  }
+  const sc=ball.r*1.22;
+  exHandGroup.scale.setScalar(sc);
+  if(exHandPose==='prayer'){
+    exHandGroup.position.set(ball.x, ball.r*0.85, ball.z);
+    exHandGroup.rotation.y=ball.heading||0;
+  } else {
+    const ang=(ball.heading||0)+Math.PI;
+    exHandGroup.position.set(ball.x+Math.sin(ang)*ball.r*0.68, ball.r*0.08, ball.z+Math.cos(ang)*ball.r*0.68);
+    exHandGroup.rotation.y=(ball.heading||0);
+  }
+  // 룬 링 회전
+  const exD=blueBall&&blueBall.userData.exDecor;
+  if(exD&&exD.visible) exD.children.forEach((c,i)=>{ if(c.geometry&&c.geometry.type==='TorusGeometry') c.rotation.y+=dt*(0.55+i*0.28)*(i%2?1:-1); });
+}
+
+/* ===================================================================== */
+
 /* --- 체력 데미지 --- */
 function damage(amt, x, z){
   if(ended || ball.hp<=0) return;
@@ -2328,11 +2603,11 @@ function updateBall(dt){
     ball.heading = Math.atan2(ux, uz);
     const axis = _v.set(uz, 0, -ux).normalize();
     _q.setFromAxisAngle(axis, dist / ball.r);
-    ((MAP>0||SNOW) ? blueBall : ballGroup).quaternion.premultiply(_q);
+    ((MAP>0||SNOW||EX_MAP>0) ? blueBall : ballGroup).quaternion.premultiply(_q);
   }
   const lim=MAP_BOUND;
   ball.x=clamp(ball.x,-lim,lim); ball.z=clamp(ball.z,-lim,lim);
-  ((MAP>0||SNOW) ? blueBall : ballGroup).position.set(ball.x, ball.r, ball.z);
+  ((MAP>0||SNOW||EX_MAP>0) ? blueBall : ballGroup).position.set(ball.x, ball.r, ball.z);
 }
 
 function updateHole(dt){
@@ -2399,11 +2674,12 @@ function initAudio(){
 const MUSIC_BASE = (location.pathname.indexOf('/game/')>=0) ? 'music/' : 'game/music/';
 let bgm=null, bgmFile='';
 function trackFor(){
-  if(DUNG) return 'map5.mp3';                // 이벤트: 쇠똥구리(마을·도시)
-  if(MAP>0) return 'map'+MAP+'.mp3';        // 스토리 맵 N → mapN.mp3
-  if(SNOW) return 'map4.mp3';                // 이벤트: 눈사람
-  if(MODE==='hole') return 'map3.mp3';       // 이벤트: 구멍 빨아들이기
-  return 'map2.mp3';                          // 이벤트: 공 굴리기/방
+  if(DUNG) return 'map5.mp3';
+  if(EX_MAP>0) return ['','map6.mp3','map5.mp3','map6.mp3'][EX_MAP]; // 퇴마 맵 BGM
+  if(MAP>0) return 'map'+MAP+'.mp3';
+  if(SNOW) return 'map4.mp3';
+  if(MODE==='hole') return 'map3.mp3';
+  return 'map2.mp3';
 }
 function setMusic(file){
   if(!file) return;
@@ -2469,13 +2745,14 @@ function initAmbient(){
   windSrc=actx.createBufferSource(); windSrc.buffer=NOISE_BUF; windSrc.loop=true; windSrc.connect(windFilter); windSrc.start();
   ambTimer=setInterval(ambTick, 1100);
 }
-const WIND_LV={ yard:0.10, city:0.09, grave:0.20, snow:0.28, room:0.03, mart:0.04, school:0.04 };
+const WIND_LV={ yard:0.10, city:0.09, grave:0.20, snow:0.28, room:0.03, mart:0.04, school:0.04,
+  haunted:0.05, cathedral:0.04, dracula:0.07 };
 function setAmbient(theme){
   ambTheme=theme||'';
   if(!actx||!windGain) return;
   const lv=(soundOn && running)? (WIND_LV[ambTheme]||0) : 0;
   windGain.gain.setTargetAtTime(lv, actx.currentTime, 0.6);
-  windFilter.frequency.setTargetAtTime(ambTheme==='snow'?620:ambTheme==='grave'?320:440, actx.currentTime, 0.6);
+  windFilter.frequency.setTargetAtTime(ambTheme==='snow'?620:ambTheme==='grave'?320:ambTheme==='haunted'?200:ambTheme==='dracula'?180:ambTheme==='cathedral'?260:440, actx.currentTime, 0.6);
 }
 function gust(boost){ if(!windGain||!actx) return; const t=actx.currentTime, base=WIND_LV[ambTheme]||0.1;
   windGain.gain.cancelScheduledValues(t); windGain.gain.setValueAtTime(windGain.gain.value,t);
@@ -2497,6 +2774,9 @@ function ambTick(){ if(!actx||!soundOn||!running) return; if(Math.random()>0.5) 
     case 'grave': Math.random()<0.5?hoot():drone(); gust(0.12); break;
     case 'snow': gust(0.16); if(Math.random()<0.3) tick(); break;
     case 'room': tick(); break;
+    case 'haunted': Math.random()<0.5?hoot():drone(); if(Math.random()<0.3) gust(0.08); break;
+    case 'cathedral': Math.random()<0.4?bell():drone(); break;
+    case 'dracula': Math.random()<0.5?drone():hoot(); gust(0.1); break;
   }
 }
 document.getElementById('bSound').addEventListener('click', function(){ soundOn=!soundOn; this.classList.toggle('off',!soundOn); this.textContent=soundOn?'🔊':'🔇'; initAudio(); });
@@ -2507,7 +2787,7 @@ let _lastSec=-1;
 function EMIT(o){ try{ if(window.parent && window.parent!==window) window.parent.postMessage(Object.assign({hole:true},o),'*'); }catch(e){} }
 function fmtTime(t){ const m=Math.floor(t/60), s=Math.floor(t%60); return m+':'+String(s).padStart(2,'0'); }
 function emitState(){
-  const isMap = MAP>0, remain = spawners.length;
+  const isMap = MAP>0||EX_MAP>0, remain = spawners.length;
   const goalPct = SNOW
     ? clamp((ball.r-START_R)/(snowTarget-START_R),0,1)
     : isMap
@@ -2589,8 +2869,8 @@ function fmtSizePlain(r){ const cm=Math.round(r*100);
 function updateHUD(){
   document.getElementById('sizeVal').innerHTML = fmtSize(ball.r);
   const hw=document.getElementById('hpWrap');
-  if(hw){ hw.style.display = (MAP>0||SNOW)?'flex':'none';
-    if(MAP>0||SNOW){ const p=Math.max(0,ball.hpMax?ball.hp/ball.hpMax:1); const f=document.getElementById('hpFill');
+  if(hw){ hw.style.display = (MAP>0||SNOW||EX_MAP>0)?'flex':'none';
+    if(MAP>0||SNOW||EX_MAP>0){ const p=Math.max(0,ball.hpMax?ball.hp/ball.hpMax:1); const f=document.getElementById('hpFill');
       f.style.width=(p*100)+'%'; f.style.background = p<0.3?'#ff3b3b':p<0.6?'#ffb13a':'#4ad06a';
       document.getElementById('hpNum').textContent = Math.ceil(ball.hp)+' / '+ball.hpMax; } }
   if(SNOW){
@@ -2598,7 +2878,7 @@ function updateHUD(){
     const prog = clamp((ball.r-START_R)/(snowTarget-START_R),0,1);
     document.getElementById('goalFill').style.width=(prog*100)+'%';
     document.getElementById('goalTxt').textContent = ball.r>=snowTarget? '받침 눈덩이 위로! ⛄' : '눈덩이 키우기';
-  } else if(MAP>0){
+  } else if(MAP>0||EX_MAP>0){
     const remaining=spawners.length, cleared=holeTotal-remaining;
     document.getElementById('cnt').textContent = remaining;
     const prog = holeTotal? cleared/holeTotal : 0;
@@ -2620,7 +2900,7 @@ function updateHUD(){
 }
 function updateModeUI(){
   document.getElementById('cntLabel').textContent =
-    SNOW ? '모은 눈' : MAP>0 ? '남은 구멍' : MODE==='hole' ? '빨아들인' : MODE==='room' ? '남은 구멍' : '모은 물건';
+    SNOW ? '모은 눈' : (MAP>0||EX_MAP>0) ? '남은 구멍' : MODE==='hole' ? '빨아들인' : MODE==='room' ? '남은 구멍' : '모은 물건';
 }
 function updateTime(){
   const m=Math.floor(timeLeft/60), s=Math.floor(timeLeft%60);
@@ -2644,7 +2924,7 @@ function loop(now){
     countdown=Math.max(0,countdown-dt);
     updateCamera(dt); updateCountdownUI();
   } else if(running && !ended){
-    if(MODE==='roll'){ updateBall(dt); if(!DUNG) updateAbsorb(dt); if(MAP>0){ updateMapExtras(dt); updateFalling(dt); } else if(SNOW){ updateSnow(dt); updateFalling(dt); } else if(DUNG){ updateDung(dt); updateSprouts(dt); updateFalling(dt); } }
+    if(MODE==='roll'){ updateBall(dt); if(!DUNG) updateAbsorb(dt); if(MAP>0){ updateMapExtras(dt); updateFalling(dt); } else if(EX_MAP>0){ updateMapExtras(dt); updateExHand(dt); updateFalling(dt); } else if(SNOW){ updateSnow(dt); updateFalling(dt); } else if(DUNG){ updateDung(dt); updateSprouts(dt); updateFalling(dt); } }
     else if(MODE==='hole'){ updateHole(dt); updateAbsorbHole(dt); updateFalling(dt); }
     else { updateRoom(dt); updateFalling(dt); }
     updateCamera(dt);
@@ -2662,7 +2942,7 @@ function loop(now){
       blueBall.scale.setScalar(Math.max(0.08, 1-0.7*t));
     }
     if(MODE==='roll' && ballSink){
-      const bg=((MAP>0||SNOW)?blueBall:ballGroup);
+      const bg=((MAP>0||SNOW||EX_MAP>0)?blueBall:ballGroup);
       ballSink.t+=dt; const t=Math.min(1,ballSink.t/0.6);
       bg.position.x += (ballSink.x-bg.position.x)*Math.min(1,dt*6);
       bg.position.z += (ballSink.z-bg.position.z)*Math.min(1,dt*6);
@@ -2713,19 +2993,25 @@ function clearWorld(){
   if(mapArrow){ scene.remove(mapArrow); mapArrow=null; }
   if(mapMark){ scene.remove(mapMark); mapMark=null; }
   roomSink=null; roomTotal=0; ballSink=null;
+  if(exHandGroup){ exHandGroup.visible=false; }
+  if(blueBall.userData.exDecor) blueBall.userData.exDecor.visible=false;
   blueBall.scale.setScalar(1); blueBall.quaternion.identity();
   ballGroup.scale.setScalar(1);
 }
 // 맵별 제한시간(+30초): 맵1=90·맵2=120·맵3,4=150·맵5,6=180 / 이벤트=150
-function roundTimeFor(){ if(DUNG) return 150; if(MAP>0) return [0,140,150,160,180,210,210][MAP]; return 180; }
+function roundTimeFor(){ if(DUNG) return 150; if(EX_MAP>0) return 160; if(MAP>0) return [0,140,150,160,180,210,210][MAP]; return 180; }
 function beginRound(mode){
   // 맵 모드(map1~6) → 롤 메커니즘 + 테마 레벨 / snow → 눈사람 만들기 이벤트
+  EX_MAP=0; // 이전 라운드 잔여값 클리어
   let mapId=0; const mm=/^map([1-6])$/.exec(mode||'');
   if(mm){ mapId=+mm[1]; mode='roll'; }
+  let exMapId=0; const em=/^exmap([1-3])$/.exec(mode||'');
+  if(em){ exMapId=+em[1]; mode='roll'; }
   SNOW = (mode==='snow'); if(SNOW) mode='roll';
   DUNG = 0; if(mode==='dung'){ DUNG=1; mode='roll'; } else if(mode==='dungcity'){ DUNG=2; mode='roll'; }
   MAP = mapId; MODE = mode;
   clearWorld();
+  EX_MAP = exMapId; // clearWorld 이후에 설정 (clearWorld가 EX_MAP을 리셋하지 않도록)
   ball = { x:0, z:0, r:START_R, vol:0, area:Math.PI*START_R*START_R, heading:0, score:0, hp:350, hpMax:350 };
   if(mapId===3){ ball.hp=400; ball.hpMax=400; }   // 맵3 체력 +50
   camYaw = 0; countdown = 3.0; _cdShown = -1;   // 시작 3-2-1 카운트다운
@@ -2764,6 +3050,31 @@ function beginRound(mode){
     running=true; ended=false; timeLeft=roundTimeFor(); growMark=START_R;
     if(gyroOn) recenterGyro();
     initAudio(); setMapLighting(['','room','yard','mart','school','city','grave'][MAP]); setAmbient(['','room','yard','mart','school','city','grave'][MAP]); setMusic(trackFor()); updateModeUI(); updateHUD(); updateTime();
+    return;
+  }
+  if(EX_MAP>0){
+    // 퇴마 이벤트2: 마법진 볼 + 손 연출 + 어두운 테마 맵
+    outdoorGroup.visible=false; skyDome.visible=false; roomGroup.visible=false;
+    MAP_BOUND=[0,14,18,20][EX_MAP]-1;
+    buildExWorld(EX_MAP);
+    blueCore.material.color.setHex(0x12051a); blueCore.material.emissive.setHex(0x2a0050); blueCore.material.emissiveIntensity=0.6;
+    if(blueBall.userData.exDecor) blueBall.userData.exDecor.visible=true;
+    refreshBlue();
+    blueBall.visible=true; ballGroup.visible=false; prince.visible=false; holeGroup.visible=false;
+    camera.position.set(0, 5.4, -7.4);
+    if(!exHandGroup){ exHandGroup=buildExorcistHand(); exHandDur=rand(4,7); exHandPose='roll'; }
+    const poses=exHandGroup.userData.poses;
+    for(const k of['roll','prayer','mudra']) if(poses[k]) poses[k].visible=k==='roll';
+    exHandPose='roll'; exHandT=0; exHandDur=rand(4,7); exHandGroup.visible=true;
+    populateExMap(EX_MAP);
+    holeTotal=spawners.length;
+    spawnChopper();
+    document.getElementById('start').classList.add('hidden');
+    document.getElementById('end').classList.add('hidden');
+    running=true; ended=false; timeLeft=roundTimeFor(); growMark=START_R;
+    if(gyroOn) recenterGyro();
+    const themeKey=['','haunted','cathedral','dracula'][EX_MAP];
+    initAudio(); setMapLighting(themeKey); setAmbient(themeKey); setMusic(trackFor()); updateModeUI(); updateHUD(); updateTime();
     return;
   }
   const outdoor = (mode!=='room');
