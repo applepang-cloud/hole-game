@@ -1513,10 +1513,18 @@ function addBoostPad(x,z,ang){
   boostPads.push({ x,z,ang, r, power:rand(11,15) });
 }
 function addCurseZone(x,z,r){
-  // 저주 안개 — 독성 노란/황록 톤(흡수 가능한 보라색 구멍과 구분)
-  const disc=new THREE.Mesh(new THREE.CircleGeometry(r,28),new THREE.MeshBasicMaterial({color:0x9aa024,transparent:true,opacity:0.38,side:THREE.DoubleSide})); disc.rotation.x=-Math.PI/2; disc.position.set(x,0.04,z); mapGroup.add(disc);
-  const ring=new THREE.Mesh(new THREE.RingGeometry(r*0.85,r,28),new THREE.MeshBasicMaterial({color:0xe6d23a,transparent:true,opacity:0.75,side:THREE.DoubleSide})); ring.rotation.x=-Math.PI/2; ring.position.set(x,0.05,z); mapGroup.add(ring);
-  curseZones.push({ x,z,r, disc, cd:0, t:Math.random()*6.28 });
+  // 저주 불바다 — 붉은 독성 + 타오르는 불꽃(흡수 가능한 보라색 구멍과 구분)
+  const disc=new THREE.Mesh(new THREE.CircleGeometry(r,28),new THREE.MeshBasicMaterial({color:0xc41818,transparent:true,opacity:0.4,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false})); disc.rotation.x=-Math.PI/2; disc.position.set(x,0.04,z); disc.renderOrder=2; mapGroup.add(disc);
+  const ring=new THREE.Mesh(new THREE.RingGeometry(r*0.82,r,28),new THREE.MeshBasicMaterial({color:0xff6a18,transparent:true,opacity:0.85,side:THREE.DoubleSide})); ring.rotation.x=-Math.PI/2; ring.position.set(x,0.05,z); ring.renderOrder=2; mapGroup.add(ring);
+  // 일렁이는 불꽃들(빌보드 콘) — 가장자리·내부에 흩뿌림
+  const flames=[]; const n=8+((r*2)|0);
+  const fmat=()=>new THREE.MeshBasicMaterial({color:0xff7a1a,transparent:true,opacity:0.85,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false,fog:false});
+  for(let i=0;i<n;i++){ const a=Math.random()*6.28, rr=Math.sqrt(Math.random())*r*0.95, h=rand(0.6,1.4);
+    const f=new THREE.Mesh(new THREE.ConeGeometry(rand(0.18,0.34),h,6),fmat());
+    const core=new THREE.Mesh(new THREE.ConeGeometry(0.12,h*0.6,6),new THREE.MeshBasicMaterial({color:0xffe23a,transparent:true,opacity:0.9,blending:THREE.AdditiveBlending,depthWrite:false,fog:false})); core.position.y=h*0.18; f.add(core);
+    f.position.set(x+Math.cos(a)*rr, h*0.4, z+Math.sin(a)*rr); f.renderOrder=3; mapGroup.add(f);
+    flames.push({ m:f, baseY:h*0.4, h, ph:Math.random()*6.28, sway:rand(0.6,1.2) }); }
+  curseZones.push({ x,z,r, disc, ring, flames, cd:0, t:Math.random()*6.28 });
 }
 function addPortal(ax,az,bx,bz){
   function ring(x,z,c){ const t=new THREE.Mesh(new THREE.TorusGeometry(0.7,0.12,10,24),new THREE.MeshPhongMaterial({color:c,emissive:c,emissiveIntensity:0.8})); t.position.set(x,0.7,z); t.rotation.x=Math.PI/2; mapGroup.add(t); return t; }
@@ -1536,7 +1544,13 @@ function updateDevices(dt){
   }
   for(const p of boostPads){ if(Math.hypot(ball.x-p.x,ball.z-p.z)<p.r){ boostT=0.45; boostVec={x:Math.sin(p.ang)*p.power,z:Math.cos(p.ang)*p.power}; SFX.grow(); } }
   if(boostT>0){ boostT-=dt; ball.x+=boostVec.x*dt; ball.z+=boostVec.z*dt; }
-  for(const z of curseZones){ z.t+=dt; if(z.disc) z.disc.material.opacity=0.3+0.2*Math.abs(Math.sin(z.t*2));
+  for(const z of curseZones){ z.t+=dt;
+    if(z.disc) z.disc.material.opacity=0.32+0.18*Math.abs(Math.sin(z.t*3));   // 깜빡이는 불빛
+    if(z.ring) z.ring.material.opacity=0.7+0.25*Math.abs(Math.sin(z.t*4+1));
+    if(z.flames){ for(const fl of z.flames){ const w=z.t*6+fl.ph;   // 불꽃 일렁임
+      const fs=0.8+0.35*Math.sin(w*1.3); fl.m.scale.set(0.85+0.2*Math.sin(w*1.7), fs, 0.85+0.2*Math.cos(w));
+      fl.m.position.y=fl.baseY+Math.sin(w)*0.12; fl.m.rotation.z=Math.sin(w*0.9)*0.18*fl.sway;
+      fl.m.material.opacity=0.6+0.3*Math.abs(Math.sin(w*1.5)); } }
     if(Math.hypot(ball.x-z.x,ball.z-z.z)<z.r){ ballSlow=0.45; z.cd-=dt; if(z.cd<=0){ z.cd=0.7; damage(4,z.x,z.z); } } }
   for(const car of traffic){ if(car.cd>0) car.cd-=dt;
     car.x+=Math.sin(car.ang)*car.speed*dt; car.z+=Math.cos(car.ang)*car.speed*dt;
