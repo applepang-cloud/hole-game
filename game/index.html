@@ -2407,7 +2407,7 @@ function trackFor(){
 }
 function setMusic(file){
   if(!file) return;
-  if(!bgm){ bgm=new Audio(); bgm.loop=true; bgm.volume=0.19; bgm.preload='auto'; }
+  if(!bgm){ bgm=new Audio(); bgm.loop=true; bgm.volume=0.22; bgm.preload='auto'; }
   if(bgmFile!==file){ bgmFile=file; bgm.src=MUSIC_BASE+file; try{ bgm.load(); }catch(_){} }
   if(musicOn){ try{ bgm.currentTime=0; }catch(_){}  const p=bgm.play(); if(p&&p.catch) p.catch(()=>{}); } else { bgm.pause(); }
 }
