@@ -230,6 +230,11 @@
             <em>눈덩이를 굴려 키워 눈사람 완성!</em>
           </button>
         </div>
+        <button class="modebtn" id="customMapBtn" style="border-color:#7a5cc0">
+          <span class="ic">🛠️</span>
+          <b>커스텀 맵 불러오기</b>
+          <em>에디터에서 만든 맵(JSON)을 불러와 플레이</em>
+        </button>
       </div>
       <div class="hint">📱 버튼을 켜면 기울기로 조작 · 🔊 소리 켜면 더 신난다</div>
       <div class="credit">반다이남코 「괴혼(카타마리 다마시)」 시리즈에서 영감 · 오리지널 로우폴리 오마주</div>
@@ -244,6 +249,16 @@
       </div>
       <button class="btn" id="againBtn">다시 하기</button>
       <button class="btn ghost" id="menuBtn">모드 선택</button>
+    </div>
+    <div class="veil hidden" id="loadModal">
+      <h1 class="jua" style="font-size:22px">커스텀 맵 불러오기</h1>
+      <p style="font-size:12px;margin:2px 16px;opacity:.85">에디터에서 내보낸 <b>맵 JSON 파일</b>을 선택하거나, 아래에 붙여넣으세요.</p>
+      <input type="file" id="loadFile" accept=".json,application/json" style="margin:8px 0;color:#fff;max-width:90%">
+      <textarea id="loadText" placeholder='{"format":"hole-map","objects":[ ... ]}' style="width:88%;max-width:520px;height:120px;border-radius:10px;border:1px solid #555;background:#1b1b22;color:#eee;font-size:12px;padding:8px;resize:vertical"></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn" id="loadGoBtn">불러와서 플레이</button>
+        <button class="btn ghost" id="loadCancelBtn">취소</button>
+      </div>
     </div>
   </div>
 </div>
@@ -912,6 +927,8 @@ function populate(){
 /* ===================== 맵(테마 레벨) 시스템 ===================== */
 let MAP=0, MAP_BOUND=GROUND-2, mapGroup=null, windowGhost=null, ambT=0, ballSink=null, holeTotal=0;
 let EX_MAP=0;   // 퇴마 이벤트2: 0=아님 1=귀신방 2=성당 3=드라큐라성
+// 커스텀 맵(에디터 import): MAP=CUSTOM_ID(99)로 두면 기존 MAP>0 경로 전부 재사용
+const CUSTOM_ID=99; let CUSTOM=null, pendingCustom=null;
 let exHandGroup=null, exHandPose='roll', exHandT=0, exHandDur=0;
 let monsters=[], splats=[], spawners=[];
 let chopper=null, chopperT=0, attackTimer=0, bombs=[], hurtT=0;
@@ -1118,10 +1135,12 @@ function mapSwallow(item){
   loose.splice(loose.indexOf(item),1);
   falling.push({ grp:item.grp, x0:item.x, z0:item.z, y0:(item.y||0.15)+0.1, t:0, dur:0.4,
     spin:rand(4,9), tilt:rand(3,7), toY:Math.max(0.3,ball.r*0.5) });
-  // 빨아들이기 성장 — 눈 모드는 눈더미를 묻혀 크게 성장, 그 외 아주 조금
-  ball.vol += Math.pow(item.size,3)*ABSORB*(SNOW?0.5:0.045); ball.score++;
+  // 빨아들이기 성장 — 눈 모드는 눈더미를 묻혀 크게 성장, 커스텀 맵은 카타마리식 성장, 그 외 아주 조금
+  ball.vol += Math.pow(item.size,3)*ABSORB*(SNOW?0.5:(MAP===CUSTOM_ID?0.4:0.045)); ball.score++;
   refreshBlue(); SFX.pop(ball.score); updateHUD();
   if(SNOW && ball.r>=snowTarget){} // (목표는 updateSnow의 받침 도달로 처리)
+  // 커스텀 맵 크기 목표(구멍 없는 맵): 목표 크기 도달 시 클리어
+  if(MAP===CUSTOM_ID && CUSTOM && CUSTOM.goalType==='size' && ball.r>=CUSTOM.goalR && !ended) finish(true);
 }
 function updateSplats(dt){
   for(let i=splats.length-1;i>=0;i--){ const s=splats[i]; s.t+=dt; const t=Math.min(1,s.t/s.dur);
@@ -1229,7 +1248,7 @@ function updateSpawners(dt){
         if(s.mega){ ball.vol += (1+ball.vol)*0.6 + 3; }   // 메가 구멍 — 볼이 크게 부풀어 침대까지 뭉갬
         else { const gmul = clamp(0.45 + (s.r-0.4)/0.5*0.3, 0.45, 0.75); ball.vol += (0.8 + s.r*s.r*s.r)*1.08*gmul; }   // 작은 구멍 적게·큰 구멍 더(1.2배)
         ball.score++; refreshActive(); SFX.loot(); updateHUD();
-        if(MAP>0 && spawners.length===0 && !ended) finish(true);   // 맵: 모든 구멍 제거 → 클리어(눈사람 모드는 제외)
+        if(MAP>0 && holeTotal>0 && spawners.length===0 && !ended) finish(true);   // 맵: 모든 구멍 제거 → 클리어(구멍 없는 커스텀 맵은 크기 목표로 별도 처리)
         continue;
       }
     } else {
@@ -1400,6 +1419,7 @@ function updateMapLights(){
 }
 
 function buildMapWorld(id){
+  if(id===CUSTOM_ID){ return buildCustomWorld(CUSTOM); }
   if(mapGroup) scene.remove(mapGroup);
   mapGroup=new THREE.Group(); scene.add(mapGroup);
   windowGhost=null; mapWalls=[];
@@ -1451,6 +1471,7 @@ function buildMapWorld(id){
   }
 }
 function populateMap(id){
+  if(id===CUSTOM_ID){ return populateCustom(CUSTOM); }
   const cfg=MAPS[id], H=cfg.bound-2;
   const P = ()=> rand(-H,H);
   const Pc = (mr)=>{ let x,z,t=0; do{ x=rand(-H,H); z=rand(-H,H); t++; }while(Math.hypot(x,z)<(mr||0) && t<24); return [x,z]; };
@@ -2710,6 +2731,7 @@ let bgm=null, bgmFile='';
 function trackFor(){
   if(DUNG) return 'map5.mp3';
   if(EX_MAP>0) return ['','map6.mp3','map5.mp3','map6.mp3'][EX_MAP]; // 퇴마 맵 BGM
+  if(MAP===CUSTOM_ID) return (CUSTOM&&CUSTOM.music) || (CUSTOM&&CUSTOM.indoor?'map1.mp3':'map2.mp3');
   if(MAP>0) return 'map'+MAP+'.mp3';
   if(SNOW) return 'map4.mp3';
   if(MODE==='hole') return 'map3.mp3';
@@ -3037,7 +3059,113 @@ function clearWorld(){
   ballGroup.scale.setScalar(1);
 }
 // 맵별 제한시간(+30초): 맵1=90·맵2=120·맵3,4=150·맵5,6=180 / 이벤트=150
-function roundTimeFor(){ if(DUNG) return 150; if(EX_MAP>0) return 160; if(MAP>0) return [0,140,150,160,180,210,210][MAP]; return 180; }
+function roundTimeFor(){ if(DUNG) return 150; if(EX_MAP>0) return 160; if(MAP===CUSTOM_ID) return (CUSTOM&&CUSTOM.time)||180; if(MAP>0) return [0,140,150,160,180,210,210][MAP]; return 180; }
+/* ===================== 커스텀 맵 임포터 (에디터 hole-map JSON → 씬) =====================
+   에디터(외부 제작)는 각 오브젝트를 '프리미티브 파츠 배열'로 export → 게임이 그대로 재구성.
+   포맷 스펙은 MAP_FORMAT.md 참고. MAP=CUSTOM_ID로 두어 기존 맵 메커니즘(blueBall·구멍·몬스터) 재사용. */
+function _hex(c, def){ if(c==null) return def; if(typeof c==='number') return c; const s=(''+c).replace('#',''); const n=parseInt(s,16); return isNaN(n)?def:n; }
+function _phong(color, shading, gloss){
+  const smooth = (shading==null) ? SMOOTH : (shading==='smooth');
+  const shin = (gloss==null) ? (smooth?20:6) : Math.max(0, Math.min(120, gloss*120));
+  return new THREE.MeshPhongMaterial({ color:_hex(color,0xcccccc), flatShading:!smooth, shininess:shin, specular: smooth?0x2e2e26:0x141414 });
+}
+// 파츠 1개 → Mesh. g: box|sphere|cylinder|cone|torus
+function buildPart(p){
+  let geo;
+  const s=p.size||[1,1,1], r=p.r;
+  switch(p.g){
+    case 'sphere':   geo=new THREE.SphereGeometry(r||0.5,16,12); break;
+    case 'cylinder': { const rr=Array.isArray(r)?r:[r||0.3,r||0.3,p.h||1]; geo=new THREE.CylinderGeometry(rr[0],rr[1],rr[2]||p.h||1,18); break; }
+    case 'cone':     geo=new THREE.ConeGeometry(r||0.4, p.h||1, 18); break;
+    case 'torus':    geo=new THREE.TorusGeometry(r||0.5, p.tube||0.12, 14, 36); break;
+    case 'box': default: geo=new THREE.BoxGeometry(s[0]||1, s[1]||1, s[2]||1); break;
+  }
+  const m=new THREE.Mesh(geo, _phong(p.color, p.shading, p.gloss));
+  if(p.pos) m.position.set(p.pos[0]||0, p.pos[1]||0, p.pos[2]||0);
+  if(p.rot) m.rotation.set(p.rot[0]||0, p.rot[1]||0, p.rot[2]||0);
+  if(p.scale){ const sc=p.scale; if(Array.isArray(sc)) m.scale.set(sc[0],sc[1],sc[2]); else m.scale.setScalar(sc); }
+  m.castShadow=true;
+  return m;
+}
+// 오브젝트(파츠 묶음) → Group. userData.size(점유반경)·y(접지 보정) 계산.
+function buildPartsGroup(obj){
+  const g=new THREE.Group();
+  const parts=(obj.parts&&obj.parts.length)?obj.parts:[{g:'box',size:[1,1,1],pos:[0,0.5,0],color:obj.color}];
+  for(const p of parts){ try{ g.add(buildPart(p)); }catch(e){} }
+  const box=new THREE.Box3().setFromObject(g);
+  if(!isFinite(box.min.y)){ g.userData.size=0.5; g.userData.y=0.5; return g; }
+  const sx=box.max.x-box.min.x, sz=box.max.z-box.min.z;
+  g.userData.size=Math.max(0.25, Math.max(sx,sz)*0.5);
+  // 파츠 묶음 전체를 들어올려 바닥(y=0)에 접지: 자식들을 -box.min.y 만큼 올림
+  for(const c of g.children) c.position.y += -box.min.y;
+  g.userData.y = (box.max.y-box.min.y)*0.0; // 그룹 자체는 바닥기준, 자식 보정으로 접지 완료
+  g.userData.y = 0;
+  return g;
+}
+// addFlat 변형 — 에디터의 rotY/scale 보존(addFlat은 회전을 랜덤화하므로 별도)
+function placeCustomProp(g, obj){
+  const sc=obj.scale||1;
+  if(!g.userData.hasShadow) addShadow(g, Math.max(0.2, g.userData.size*0.9));
+  if(sc!==1) g.scale.setScalar(sc);
+  g.position.set(obj.x||0, (g.userData.y||0)*sc, obj.z||0);
+  g.rotation.y = obj.rotY||0;
+  scene.add(g);
+  const fsize=g.userData.size*sc;
+  regOccupy(obj.x||0, obj.z||0, fsize*0.8);
+  if(fsize>=1.5) regBig(g, obj.x||0, obj.z||0, fsize);
+  loose.push({ grp:g, x:obj.x||0, z:obj.z||0, y:(g.userData.y||0)*sc, size:fsize, kind:'flat' });
+}
+// 커스텀 몬스터(배회 AI) — spawnMonster의 prebuilt 버전
+function spawnCustomMonster(g, obj){
+  if(monsters.length>=MONSTER_CAP){ placeCustomProp(g,obj); return; }
+  const sc=obj.scale||1; if(sc!==1) g.scale.setScalar(sc);
+  if(!g.userData.hasShadow) addShadow(g, Math.max(0.2, g.userData.size*0.9));
+  const size=g.userData.size*sc, baseY=(g.userData.y||0)*sc;
+  g.position.set(obj.x||0, baseY, obj.z||0); g.rotation.y=obj.rotY||Math.random()*6.28; scene.add(g);
+  monsters.push({ grp:g, x:obj.x||0, z:obj.z||0, size, kind:'custom', baseY, dir:Math.random()*6.28, speed:rand(1.0,2.2), turn:rand(0.6,1.6), bob:Math.random()*6.28, climb:0, atkCd:rand(0.5,1.5) });
+}
+function buildCustomWorld(spec){
+  if(mapGroup) scene.remove(mapGroup);
+  mapGroup=new THREE.Group(); scene.add(mapGroup); windowGhost=null; mapWalls=[];
+  const H=spec.bound||26;
+  if(spec.indoor){
+    const floor=new THREE.Mesh(new THREE.PlaneGeometry(H*2,H*2), new THREE.MeshPhongMaterial({color:_hex(spec.floor,0xcdb38a),shininess:6,specular:0x101010}));
+    floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; mapGroup.add(floor);
+    const WALL_H=8, T=0.8;
+    for(const [x,z,w,d,nx,nz] of [[0,-H,H*2,T,0,-1],[0,H,H*2,T,0,1],[-H,0,T,H*2,-1,0],[H,0,T,H*2,1,0]]){
+      const wall=new THREE.Mesh(new THREE.BoxGeometry(w,WALL_H,d), new THREE.MeshPhongMaterial({color:_hex(spec.wall,0xcfdbe6),shininess:3,transparent:true,opacity:1}));
+      wall.position.set(x,WALL_H/2,z); mapGroup.add(wall); mapWalls.push({mesh:wall,nx,nz,lim:H});
+    }
+  } else {
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(H+60,18,12),new THREE.MeshBasicMaterial({color:_hex(spec.sky,0xa9def7),side:THREE.BackSide,fog:false})); mapGroup.add(dome);
+    const ground=new THREE.Mesh(new THREE.CircleGeometry(H+30,44),MAT(_hex(spec.ground,0x83cf4e),false)); ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; mapGroup.add(ground);
+  }
+}
+function populateCustom(spec){
+  for(const obj of (spec.objects||[])){
+    try{
+      if(obj.role==='spawner'){ addSpawner(obj.x||0, obj.z||0, obj.r||obj.scale||0.8, null, 0); continue; }
+      const g=buildPartsGroup(obj);
+      if(obj.role==='monster') spawnCustomMonster(g, obj);
+      else placeCustomProp(g, obj);
+    }catch(e){}
+  }
+  CUSTOM.goalType = (spawners.length>0) ? 'holes' : 'size';
+  CUSTOM.goalR = (spec.goal && spec.goal.value) || 1.8;
+}
+// 외부/부모(Flutter)·메뉴에서 호출하는 로더
+window.__holeLoadCustomMap = function(data){
+  try{
+    const spec = (typeof data==='string') ? JSON.parse(data) : data;
+    if(!spec || spec.format!=='hole-map' || !Array.isArray(spec.objects)){ alert('맵 형식이 올바르지 않습니다.\n(format:"hole-map" + objects 배열 필요)'); return {ok:false}; }
+    spec.bound = Math.max(10, Math.min(60, spec.bound||26));
+    pendingCustom = spec;
+    const lm=document.getElementById('loadModal'); if(lm) lm.classList.add('hidden');
+    beginRound('custom');
+    return {ok:true};
+  }catch(e){ alert('맵을 읽지 못했습니다: '+e.message); return {ok:false, error:String(e.message)}; }
+};
+
 function beginRound(mode){
   // 맵 모드(map1~6) → 롤 메커니즘 + 테마 레벨 / snow → 눈사람 만들기 이벤트
   EX_MAP=0; // 이전 라운드 잔여값 클리어
@@ -3045,6 +3173,16 @@ function beginRound(mode){
   if(mm){ mapId=+mm[1]; mode='roll'; }
   let exMapId=0; const em=/^exmap([1-3])$/.exec(mode||'');
   if(em){ exMapId=+em[1]; mode='roll'; }
+  // 커스텀 맵: MAPS[CUSTOM_ID] 동적 등록 후 mapId=CUSTOM_ID로 일반 맵 경로 진입
+  if(mode==='custom'){
+    CUSTOM = pendingCustom;
+    if(CUSTOM){
+      MAPS[CUSTOM_ID] = { name:CUSTOM.name||'커스텀 맵', bound:CUSTOM.bound||26, indoor:!!CUSTOM.indoor,
+        floor:_hex(CUSTOM.floor,0xcdb38a), line:0xb89a72, wall:_hex(CUSTOM.wall,0xcfdbe6), wallH:8,
+        sky:CUSTOM.sky, ground:CUSTOM.ground, road:CUSTOM.road };
+    }
+    mapId=CUSTOM_ID; mode='roll';
+  }
   SNOW = (mode==='snow'); if(SNOW) mode='roll';
   DUNG = 0; if(mode==='dung'){ DUNG=1; mode='roll'; } else if(mode==='dungcity'){ DUNG=2; mode='roll'; }
   MAP = mapId; MODE = mode;
@@ -3082,12 +3220,14 @@ function beginRound(mode){
     camera.position.set(0, 5.4, -7.4);
     populateMap(MAP);
     holeTotal = spawners.length;   // 클리어 진행도용(모든 구멍 제거 시 클리어)
-    spawnChopper();                // 공중 공격 헬기
+    if(MAP!==CUSTOM_ID) spawnChopper();   // 공중 공격 헬기(커스텀 맵은 생략)
     document.getElementById('start').classList.add('hidden');
     document.getElementById('end').classList.add('hidden');
     running=true; ended=false; timeLeft=roundTimeFor(); growMark=START_R;
     if(gyroOn) recenterGyro();
-    initAudio(); setMapLighting(['','room','yard','mart','school','city','grave'][MAP]); setAmbient(['','room','yard','mart','school','city','grave'][MAP]); setMusic(trackFor()); updateModeUI(); updateHUD(); updateTime();
+    const themeKey = (MAP===CUSTOM_ID) ? ((CUSTOM&&CUSTOM.theme) || (CUSTOM&&CUSTOM.indoor?'room':'yard'))
+                                       : ['','room','yard','mart','school','city','grave'][MAP];
+    initAudio(); setMapLighting(themeKey); setAmbient(themeKey); setMusic(trackFor()); updateModeUI(); updateHUD(); updateTime();
     return;
   }
   if(EX_MAP>0){
@@ -3198,6 +3338,18 @@ document.getElementById('eventToggle').addEventListener('click', function(){
 });
 document.getElementById('againBtn').addEventListener('click', ()=> beginRound(curRound()));
 document.getElementById('menuBtn').addEventListener('click', showMenu);
+// 커스텀 맵 불러오기 모달
+(function(){
+  const modal=document.getElementById('loadModal'), fileIn=document.getElementById('loadFile'), txt=document.getElementById('loadText');
+  const open=()=>{ if(txt) txt.value=''; if(fileIn) fileIn.value=''; modal.classList.remove('hidden'); };
+  document.getElementById('customMapBtn').addEventListener('click', open);
+  document.getElementById('loadCancelBtn').addEventListener('click', ()=> modal.classList.add('hidden'));
+  fileIn.addEventListener('change', e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ txt.value=r.result; }; r.readAsText(f); });
+  document.getElementById('loadGoBtn').addEventListener('click', ()=>{
+    const s=(txt.value||'').trim(); if(!s){ alert('맵 JSON 파일을 선택하거나 내용을 붙여넣어 주세요.'); return; }
+    window.__holeLoadCustomMap(s);
+  });
+})();
 
 /* ===================== 리사이즈(레터박스 세로) ===================== */
 function resize(){
@@ -3277,6 +3429,7 @@ requestAnimationFrame(loop);
   window.addEventListener('message', function(ev){
     var d = ev.data;
     if(d && typeof d==='object' && d.holeCmd==='restart'){ startMode(d.mode || 'roll'); }
+    if(d && typeof d==='object' && d.holeCmd==='loadCustom' && d.map){ try{ window.__holeLoadCustomMap(d.map); }catch(e){} }
   });
 })();
 </script>
