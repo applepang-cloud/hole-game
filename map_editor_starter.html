@@ -83,6 +83,7 @@
   <button class="tb" id="loadBtn">📂 불러오기</button>
   <button class="tb" id="newBtn">✨ 새 맵</button>
   <button class="tb go" id="exportBtn">⬇ 내보내기(JSON)</button>
+  <button class="tb go" id="shareBtn">📋 맵 JSON 복사</button>
   <button class="tb go" id="playBtn">▶ 미리보기</button>
   <div class="grow"></div>
   <button class="tb auto" id="autoBtn">🪄 맵 자동 생성</button>
@@ -525,6 +526,41 @@ document.getElementById('newBtn').onclick=()=>{ if(!confirm('현재 맵을 비�
 document.getElementById('saveBtn').onclick=saveLocal;
 document.getElementById('loadBtn').onclick=()=>{ if(localStorage.getItem('holeEditor')&&confirm('브라우저 저장본을 불러올까요? (취소=파일 선택)')) loadLocal(); else document.getElementById('fileLoad').click(); };
 document.getElementById('exportBtn').onclick=()=>{ const spec=exportMap(); download((M().meta.name||'map')+'.json', JSON.stringify(spec,null,1)); toast('⬇ JSON 내보냄 — 게임 "커스텀 맵 불러오기"로 로드'); };
+document.getElementById('shareBtn').onclick=()=>{
+  const spec=exportMap();
+  const txt=JSON.stringify(spec,null,1);
+  // 복사 모달 표시
+  let modal=document.getElementById('shareModal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='shareModal';
+    modal.style.cssText='position:fixed;inset:0;z-index:999;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center';
+    modal.innerHTML=`<div style="background:#1a1d28;border:1px solid #445;border-radius:14px;padding:18px;width:min(92vw,560px);display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <b style="font-size:15px">📋 맵 JSON — 전체 선택 후 복사하세요</b>
+        <button id="shareClose" style="background:none;border:none;color:#aaa;font-size:20px;cursor:pointer">✕</button>
+      </div>
+      <textarea id="shareTA" readonly style="width:100%;height:260px;background:#0e1018;border:1px solid #334;border-radius:8px;color:#cce;font-size:11px;padding:8px;resize:vertical;font-family:monospace"></textarea>
+      <div style="display:flex;gap:8px">
+        <button id="shareCopy" style="flex:1;background:#5a4fb0;color:#fff;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;font-weight:700">📋 클립보드 복사</button>
+        <button id="shareAll" style="background:#2a2d3a;color:#ddd;border:1px solid #445;border-radius:8px;padding:9px;font-size:13px;cursor:pointer">전체 선택</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    document.getElementById('shareClose').onclick=()=>modal.style.display='none';
+    modal.addEventListener('click',e=>{ if(e.target===modal) modal.style.display='none'; });
+    document.getElementById('shareCopy').onclick=()=>{
+      navigator.clipboard.writeText(document.getElementById('shareTA').value)
+        .then(()=>{ document.getElementById('shareCopy').textContent='✅ 복사됨!'; setTimeout(()=>document.getElementById('shareCopy').textContent='📋 클립보드 복사',2000); })
+        .catch(()=>{ document.getElementById('shareTA').select(); document.execCommand('copy'); });
+    };
+    document.getElementById('shareAll').onclick=()=>{ document.getElementById('shareTA').select(); };
+  }
+  document.getElementById('shareTA').value=txt;
+  modal.style.display='flex';
+  setTimeout(()=>{ document.getElementById('shareTA').select(); },100);
+  toast('JSON 모달 열림 — 복사해서 게임에 붙여넣기');
+};
 document.getElementById('playBtn').onclick=openPreview;
 document.getElementById('pvClose').onclick=()=>document.getElementById('pvWrap').classList.remove('show');
 document.getElementById('autoBtn').onclick=()=>{ const t=prompt('맵 설명을 입력하세요 (예: "도시에 빌딩 8개, 차 5대, 좀비 6마리"):'); if(t) autoGenerate(t); };
