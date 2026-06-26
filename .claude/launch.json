@@ -6,6 +6,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["http-server", "build/web", "-p", "8865", "--cors", "-c-1"],
       "port": 8865
+    },
+    {
+      "name": "hole-src",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["http-server", "web", "-p", "8867", "--cors", "-c-1"],
+      "port": 8867
     }
   ]
 }
