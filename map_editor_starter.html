@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>홀 맵 에디터 (시작 코드)</title>
+<!--
+  ┌────────────────────────────────────────────────────────────────────────────┐
+  │  홀 인 더 다크 — 맵 에디터 시작 코드(scaffold)                                   │
+  │  · 게임/미리보기와 동일한 hole-map 포맷(MAP_FORMAT.md) + 프리미티브 빌더 + 매끈 룩  │
+  │  · 이 파일을 claude.ai 아티팩트로 가져가 확장하세요.                              │
+  │                                                                              │
+  │  핵심 흐름:                                                                    │
+  │   1) 우측 팔레트에서 종류 선택 → 바닥 클릭 → 배치                                 │
+  │   2) 오브젝트 클릭 선택 → 하단 채팅창에 "크게/빨간색/90도 회전/키 크게" 등 입력 → 수정 │
+  │   3) 💾내보내기 → hole-map JSON (게임/미리보기가 그대로 로드)                      │
+  │   4) ▶미리보기 → 우측 하단 iframe(map_preview.html)에서 즉석 플레이                │
+  │  확장 포인트는 코드 곳곳의  // [확장]  주석 참고.                                  │
+  └────────────────────────────────────────────────────────────────────────────┘
+-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;font-family:'Jua','Noto Sans KR','Malgun Gothic',sans-serif}
+  html,body{width:100%;height:100%;overflow:hidden;background:#10131a;color:#e8e8ee;-webkit-user-select:none;user-select:none}
+  #cv{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+  /* 상단바 */
+  #top{position:fixed;top:0;left:0;right:0;height:48px;display:flex;align-items:center;gap:6px;padding:0 10px;background:rgba(18,20,28,.92);border-bottom:1px solid #2a2e3a;z-index:10}
+  #top .mapnav{display:flex;align-items:center;gap:4px}
+  #top .grow{flex:1}
+  .tb{background:#262a36;border:1px solid #3a3f4d;color:#e8e8ee;border-radius:8px;padding:7px 11px;font-size:13px;cursor:pointer}
+  .tb:hover{background:#303543}.tb:active{transform:translateY(1px)}
+  .tb.go{background:#5a4fb0;border-color:#6b5fc0}
+  .tb.auto{background:#b0784f;border-color:#c0885f}
+  #mapName{font-size:15px;min-width:90px;text-align:center}
+  /* 좌측 설정 */
+  #leftBtn{position:fixed;left:10px;top:58px;z-index:9}
+  #settings{position:fixed;left:10px;top:100px;width:240px;background:rgba(20,23,31,.96);border:1px solid #333;border-radius:12px;padding:12px;z-index:9;display:none}
+  #settings.show{display:block}
+  #settings h3{font-size:13px;margin-bottom:8px;opacity:.8}
+  #settings label{display:block;font-size:12px;margin:8px 0 3px;opacity:.85}
+  #settings .seg{display:flex;gap:4px;flex-wrap:wrap}
+  #settings .seg button{flex:1;background:#262a36;border:1px solid #3a3f4d;color:#ddd;border-radius:7px;padding:5px;font-size:11px;cursor:pointer}
+  #settings .seg button.on{background:#5a4fb0;border-color:#6b5fc0}
+  #settings input[type=range]{width:100%}
+  #settings .scope{font-size:11px;opacity:.6;margin-top:10px}
+  /* 우측 팔레트 */
+  #palette{position:fixed;right:0;top:48px;bottom:96px;width:170px;background:rgba(18,20,28,.92);border-left:1px solid #2a2e3a;z-index:8;display:flex;flex-direction:column}
+  .pgroup{flex:1;overflow-y:auto;padding:8px}
+  .pgroup h4{font-size:12px;opacity:.6;margin:4px 2px 6px;position:sticky;top:0;background:rgba(18,20,28,.95);padding:2px}
+  .pbtn{display:block;width:100%;text-align:left;background:#262a36;border:1px solid #343a48;color:#e8e8ee;border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:5px;cursor:pointer}
+  .pbtn:hover{background:#303543}
+  .pbtn.armed{background:#5a4fb0;border-color:#8b7fe0;box-shadow:0 0 0 2px rgba(139,127,224,.4)}
+  .pbtn.free{border-style:dashed;border-color:#6b5fc0}
+  .pdiv{height:1px;background:#2a2e3a;margin:4px 0 8px}
+  /* 하단 채팅 */
+  #bottom{position:fixed;left:0;right:0;bottom:0;height:96px;background:rgba(18,20,28,.95);border-top:1px solid #2a2e3a;z-index:9;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+  #selInfo{font-size:12px;opacity:.8;min-height:16px}
+  #chatRow{display:flex;gap:6px}
+  #chat{flex:1;background:#1b1e27;border:1px solid #3a3f4d;border-radius:9px;color:#eee;font-size:14px;padding:9px 11px}
+  .ib{background:#262a36;border:1px solid #3a3f4d;color:#ddd;border-radius:9px;padding:0 12px;font-size:18px;cursor:pointer}
+  /* 미리보기 패널 */
+  #pvWrap{position:fixed;right:180px;bottom:104px;width:360px;height:300px;z-index:11;background:#0d0f14;border:2px solid #5a4fb0;border-radius:12px;overflow:hidden;display:none;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+  #pvWrap.show{display:block}
+  #pvWrap iframe{width:100%;height:calc(100% - 30px);border:0}
+  #pvBar{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 8px;background:#1b1e27;font-size:12px}
+  #pvBar button{background:none;border:0;color:#aaa;font-size:16px;cursor:pointer}
+  /* 토스트 안내 */
+  #toast{position:fixed;left:50%;top:60px;transform:translateX(-50%);background:rgba(30,30,40,.95);border:1px solid #5a4fb0;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;z-index:20;opacity:0;transition:opacity .2s;pointer-events:none;max-width:80%;text-align:center}
+  #toast.show{opacity:1}
+  #help{position:fixed;left:50%;bottom:104px;transform:translateX(-50%);font-size:12px;opacity:.55;z-index:5;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="top">
+  <div class="mapnav">
+    <button class="tb" id="mapPrev">◀</button>
+    <span id="mapName">맵 1</span>
+    <button class="tb" id="mapNext">▶</button>
+  </div>
+  <button class="tb" id="saveBtn">💾 저장</button>
+  <button class="tb" id="loadBtn">📂 불러오기</button>
+  <button class="tb" id="newBtn">✨ 새 맵</button>
+  <button class="tb go" id="exportBtn">⬇ 내보내기(JSON)</button>
+  <button class="tb go" id="playBtn">▶ 미리보기</button>
+  <div class="grow"></div>
+  <button class="tb auto" id="autoBtn">🪄 맵 자동 생성</button>
+</div>
+
+<button class="tb" id="leftBtn">⚙ 설정</button>
+<div id="settings">
+  <h3>렌더 설정</h3>
+  <label>셰이딩</label>
+  <div class="seg" data-key="shading"><button data-v="smooth" class="on">매끈</button><button data-v="flat">각진</button></div>
+  <label>반짝임(광택) <span id="glossVal">0.4</span></label>
+  <input type="range" id="glossR" min="0" max="1" step="0.05" value="0.4">
+  <label>폴리곤(디테일)</label>
+  <div class="seg" data-key="poly"><button data-v="low">낮음</button><button data-v="med" class="on">보통</button><button data-v="high">높음</button></div>
+  <div class="scope" id="scopeNote">대상: <b>전체</b> (오브젝트 선택 시 그 오브젝트만)</div>
+  <div style="margin-top:10px"><button class="tb" id="applyAll" style="width:100%">전체에 적용</button></div>
+</div>
+
+<div id="palette">
+  <div class="pgroup" id="grpBuild"><h4>🏠 건물 / 사물</h4></div>
+  <div class="pdiv"></div>
+  <div class="pgroup" id="grpCreature"><h4>👾 생명체</h4></div>
+</div>
+
+<div id="help">바닥을 클릭해 배치 · 오브젝트 클릭해 선택 · 빈 곳 드래그=카메라 · 휠=줌</div>
+
+<div id="bottom">
+  <div id="selInfo">선택된 오브젝트 없음 — 팔레트에서 종류를 고르세요</div>
+  <div id="chatRow">
+    <button class="ib" id="imgBtn" title="이미지 추가">🖼</button>
+    <button class="ib" id="extBtn" title="외부 3D 모델(GLB)">📦</button>
+    <input id="chat" placeholder='예: "빨간색으로", "2배 크게", "90도 회전", "키 크고 머리 큰 여자"'>
+    <button class="ib" id="sendBtn" title="적용">➤</button>
+  </div>
+</div>
+
+<div id="pvWrap">
+  <div id="pvBar"><span>▶ 미리보기 (플레이 가능)</span><button id="pvClose">✕</button></div>
+  <iframe id="pvFrame"></iframe>
+</div>
+
+<div id="toast"></div>
+<input type="file" id="fileLoad" accept=".json,application/json" style="display:none">
+<input type="file" id="fileImg" accept="image/*" style="display:none">
+<input type="file" id="fileExt" accept=".glb,.gltf" style="display:none">
+
+<script>
+(() => {
+"use strict";
+
+/* ===================== 미리보기 URL (▶미리보기 iframe) ===================== */
+// 같은 폴더에 map_preview.html이 있으면 그걸, 없으면 라이브 URL 사용.
+const PREVIEW_URL = 'map_preview.html'; // 또는 'https://applepang-cloud.github.io/hole-game/map_preview.html'
+
+/* ===================== HIGH-POLY + SMOOTH (게임 v2.1과 동일) ===================== */
+let POLY_MUL = 1.0; // 폴리곤 디테일 배수(설정에서 조절)
+(function(){ const T=THREE, M=(v,m,n)=>Math.max(n,Math.round((v||n)*m*POLY_MUL));
+  function patch(name,b){ const O=T[name]; if(!O)return; T[name]=function(){return b(O,arguments);}; }
+  patch('SphereGeometry',(O,a)=>new O(a[0],M(a[1],2.4,12),M(a[2],2.4,9),a[3],a[4],a[5],a[6]));
+  patch('ConeGeometry',(O,a)=>new O(a[0],a[1],M(a[2],3,16),M(a[3]||1,2,1),a[4],a[5],a[6]));
+  patch('CylinderGeometry',(O,a)=>new O(a[0],a[1],a[2],M(a[3],3,14),M(a[4]||1,2,1),a[5],a[6],a[7]));
+  patch('TorusGeometry',(O,a)=>new O(a[0],a[1],M(a[2],2,10),M(a[3],2,28),a[4]));
+  patch('CircleGeometry',(O,a)=>new O(a[0],M(a[1],2,24),a[2],a[3]));
+  patch('IcosahedronGeometry',(O,a)=>new O(a[0],Math.min(3,(a[1]||0)+1)));
+})();
+let SMOOTH=true;
+function _hex(c,def){ if(c==null)return def; if(typeof c==='number')return c; const n=parseInt((''+c).replace('#',''),16); return isNaN(n)?def:n; }
+function _toHexStr(n){ return '#'+('000000'+(n>>>0).toString(16)).slice(-6); }
+function partMat(p){ const sm=(p.shading==null)?SMOOTH:(p.shading==='smooth');
+  const shin=(p.gloss==null)?(sm?20:6):Math.max(0,Math.min(120,p.gloss*120));
+  return new THREE.MeshPhongMaterial({color:_hex(p.color,0xcccccc),flatShading:!sm,shininess:shin,specular:sm?0x2e2e26:0x141414}); }
+
+/* ===================== 파츠 → 메시 (게임/미리보기와 동일 buildPart) ===================== */
+function buildPart(p){
+  let geo; const s=p.size||[1,1,1], r=p.r;
+  switch(p.g){
+    case 'sphere': geo=new THREE.SphereGeometry(r||0.5,16,12); break;
+    case 'cylinder':{ const rr=Array.isArray(r)?r:[r||0.3,r||0.3,p.h||1]; geo=new THREE.CylinderGeometry(rr[0],rr[1],rr[2]||p.h||1,18); break; }
+    case 'cone': geo=new THREE.ConeGeometry(r||0.4,p.h||1,18); break;
+    case 'torus': geo=new THREE.TorusGeometry(r||0.5,p.tube||0.12,14,36); break;
+    case 'box': default: geo=new THREE.BoxGeometry(s[0]||1,s[1]||1,s[2]||1); break;
+  }
+  const m=new THREE.Mesh(geo,partMat(p));
+  if(p.pos)m.position.set(p.pos[0]||0,p.pos[1]||0,p.pos[2]||0);
+  if(p.rot)m.rotation.set(p.rot[0]||0,p.rot[1]||0,p.rot[2]||0);
+  if(p.scale){const sc=p.scale; if(Array.isArray(sc))m.scale.set(sc[0],sc[1],sc[2]); else m.scale.setScalar(sc);}
+  m.castShadow=true; return m;
+}
+
+/* ===================== 프리미티브 빌더 (종류별 parts 생성) =====================
+   각 빌더는 hole-map의 parts 배열을 반환. params로 변형(색·키·머리 등) 지원.
+   [확장] 새 종류 추가 시 여기에 함수 추가 + PALETTE에 등록. */
+function col(p,def){ return p.color||def; }
+const B = {
+  // ---- 건물/사물 ----
+  freeBuild:(p)=>[{g:'box',size:[1,1,1],pos:[0,0.5,0],color:col(p,'#b0a48a')}],
+  wall:(p)=>[{g:'box',size:[3,1.6,0.3],pos:[0,0.8,0],color:col(p,'#c9d2dc')}],
+  floor:(p)=>[{g:'box',size:[3,0.15,3],pos:[0,0.075,0],color:col(p,'#cdb38a')}],
+  house:(p)=>[{g:'box',size:[2,1.4,2],pos:[0,0.7,0],color:col(p,'#e0c088')},{g:'cone',r:1.5,h:1.0,pos:[0,1.9,0],color:p.roof||'#b05030'},{g:'box',size:[0.5,0.8,0.06],pos:[0,0.4,1.01],color:'#7a4a28'}],
+  pillar:(p)=>[{g:'cylinder',r:[0.35,0.4,2.4],pos:[0,1.2,0],color:col(p,'#d8d2c4')},{g:'box',size:[1,0.2,1],pos:[0,0.1,0],color:col(p,'#c8c2b4')},{g:'box',size:[1,0.2,1],pos:[0,2.4,0],color:col(p,'#c8c2b4')}],
+  statue:(p)=>[{g:'box',size:[1.2,0.5,1.2],pos:[0,0.25,0],color:'#9a948a'},{g:'cylinder',r:[0.25,0.3,1.2],pos:[0,1.1,0],color:col(p,'#b8b2a8')},{g:'sphere',r:0.32,pos:[0,1.9,0],color:col(p,'#b8b2a8')}],
+  building:(p)=>{ const h=p.height||4; const a=[{g:'box',size:[2,h,2],pos:[0,h/2,0],color:col(p,'#8aa0b8')}]; for(let y=0.6;y<h-0.3;y+=0.8) for(const x of[-0.5,0.5]){ a.push({g:'box',size:[0.5,0.4,0.05],pos:[x,y,1.01],color:'#cfe6ff',gloss:0.7}); } return a; },
+  car:(p)=>[{g:'box',size:[1.0,0.4,2.0],pos:[0,0.4,0],color:col(p,'#d23a3a')},{g:'box',size:[0.9,0.4,1.0],pos:[0,0.8,-0.1],color:col(p,'#e25a5a')},
+    {g:'cylinder',r:[0.25,0.25,0.2],pos:[0.5,0.25,0.6],rot:[0,0,1.57],color:'#222'},{g:'cylinder',r:[0.25,0.25,0.2],pos:[-0.5,0.25,0.6],rot:[0,0,1.57],color:'#222'},
+    {g:'cylinder',r:[0.25,0.25,0.2],pos:[0.5,0.25,-0.6],rot:[0,0,1.57],color:'#222'},{g:'cylinder',r:[0.25,0.25,0.2],pos:[-0.5,0.25,-0.6],rot:[0,0,1.57],color:'#222'}],
+  plane:(p)=>[{g:'cylinder',r:[0.3,0.2,2.4],pos:[0,0.6,0],rot:[1.57,0,0],color:col(p,'#dde3ea')},{g:'box',size:[3.2,0.1,0.7],pos:[0,0.6,0.1],color:col(p,'#cdd3da')},{g:'box',size:[1.0,0.1,0.5],pos:[0,0.6,-1.0],color:col(p,'#cdd3da')},{g:'box',size:[0.1,0.6,0.5],pos:[0,0.9,-1.0],color:col(p,'#cdd3da')}],
+  bicycle:(p)=>[{g:'torus',r:0.4,tube:0.06,pos:[0.5,0.4,0],rot:[0,1.57,0],color:'#333'},{g:'torus',r:0.4,tube:0.06,pos:[-0.5,0.4,0],rot:[0,1.57,0],color:'#333'},{g:'cylinder',r:[0.04,0.04,1.0],pos:[0,0.45,0],rot:[0,0,1.57],color:col(p,'#3a7ad0')},{g:'cylinder',r:[0.04,0.04,0.5],pos:[-0.5,0.7,0],color:col(p,'#3a7ad0')}],
+  streetlight:(p)=>[{g:'cylinder',r:[0.08,0.1,2.6],pos:[0,1.3,0],color:'#555'},{g:'box',size:[0.6,0.1,0.1],pos:[0.3,2.6,0],color:'#555'},{g:'sphere',r:0.18,pos:[0.55,2.55,0],color:'#ffe79a',gloss:0.9}],
+  chair:(p)=>[{g:'box',size:[0.5,0.08,0.5],pos:[0,0.45,0],color:col(p,'#c08a4a')},{g:'box',size:[0.5,0.5,0.08],pos:[0,0.7,-0.2],color:col(p,'#c08a4a')},
+    {g:'cylinder',r:[0.04,0.04,0.45],pos:[0.2,0.22,0.2],color:'#8a5a2a'},{g:'cylinder',r:[0.04,0.04,0.45],pos:[-0.2,0.22,0.2],color:'#8a5a2a'},{g:'cylinder',r:[0.04,0.04,0.45],pos:[0.2,0.22,-0.2],color:'#8a5a2a'},{g:'cylinder',r:[0.04,0.04,0.45],pos:[-0.2,0.22,-0.2],color:'#8a5a2a'}],
+  desk:(p)=>[{g:'box',size:[1.4,0.1,0.7],pos:[0,0.7,0],color:col(p,'#d2b48c')},{g:'cylinder',r:[0.05,0.05,0.7],pos:[0.6,0.35,0.28],color:'#9a7a4a'},{g:'cylinder',r:[0.05,0.05,0.7],pos:[-0.6,0.35,0.28],color:'#9a7a4a'},{g:'cylinder',r:[0.05,0.05,0.7],pos:[0.6,0.35,-0.28],color:'#9a7a4a'},{g:'cylinder',r:[0.05,0.05,0.7],pos:[-0.6,0.35,-0.28],color:'#9a7a4a'}],
+  furniture:(p)=>[{g:'box',size:[1.0,1.6,0.5],pos:[0,0.8,0],color:col(p,'#a0784a')},{g:'box',size:[0.9,0.05,0.45],pos:[0,1.1,0.01],color:'#8a6038'},{g:'box',size:[0.9,0.05,0.45],pos:[0,0.55,0.01],color:'#8a6038'}],
+  appliance:(p)=>[{g:'box',size:[0.9,1.3,0.7],pos:[0,0.65,0],color:col(p,'#dfe3e8')},{g:'box',size:[0.6,0.5,0.03],pos:[0,0.8,0.36],color:'#1a2230',gloss:0.8}],
+  food:(p)=>[{g:'cylinder',r:[0.4,0.45,0.08],pos:[0,0.04,0],color:'#eee'},{g:'sphere',r:0.28,pos:[0,0.28,0],color:col(p,'#e0a050')}],
+  drink:(p)=>[{g:'cylinder',r:[0.18,0.22,0.5],pos:[0,0.25,0],color:col(p,'#7ac0e0'),gloss:0.6},{g:'cylinder',r:[0.02,0.02,0.6],pos:[0.08,0.55,0],rot:[0.2,0,0],color:'#fff'}],
+  // ---- 생명체 ----
+  freeCreature:(p)=>[{g:'sphere',r:0.4,pos:[0,0.4,0],color:col(p,'#7ac06a')},{g:'sphere',r:0.28,pos:[0,0.95,0],color:col(p,'#7ac06a')}],
+  person:(p)=>{ const h=p.height||1, hs=p.headSize||1, g=p.girth||1;
+    const skin=p.skin||'#f0c8a0', top=p.top||col(p,'#4a7ad0'), bottom=p.bottom||'#33405a', hair=p.hair||'#3a2a1a';
+    const bodyH=0.7*h, legH=0.55*h;
+    return [
+      {g:'cylinder',r:[0.13*g,0.16*g,legH],pos:[0.1,legH/2,0],color:bottom},{g:'cylinder',r:[0.13*g,0.16*g,legH],pos:[-0.1,legH/2,0],color:bottom},
+      {g:'cylinder',r:[0.22*g,0.2*g,bodyH],pos:[0,legH+bodyH/2,0],color:top},
+      {g:'cylinder',r:[0.06,0.07,0.5*h],pos:[0.3,legH+bodyH*0.7,0],rot:[0,0,0.3],color:top},{g:'cylinder',r:[0.06,0.07,0.5*h],pos:[-0.3,legH+bodyH*0.7,0],rot:[0,0,-0.3],color:top},
+      {g:'sphere',r:0.2*hs,pos:[0,legH+bodyH+0.2*hs,0],color:skin},
+      {g:'sphere',r:0.22*hs,pos:[0,legH+bodyH+0.28*hs,0],color:hair,scale:[1,0.7,1]}
+    ]; },
+  animal:(p)=>[{g:'sphere',r:0.4,pos:[0,0.5,0],color:col(p,'#b08a5a'),scale:[1.4,0.9,1]},{g:'sphere',r:0.26,pos:[0,0.7,0.5],color:col(p,'#b08a5a')},
+    {g:'cylinder',r:[0.07,0.07,0.4],pos:[0.25,0.2,0.3],color:'#8a6a3a'},{g:'cylinder',r:[0.07,0.07,0.4],pos:[-0.25,0.2,0.3],color:'#8a6a3a'},{g:'cylinder',r:[0.07,0.07,0.4],pos:[0.25,0.2,-0.3],color:'#8a6a3a'},{g:'cylinder',r:[0.07,0.07,0.4],pos:[-0.25,0.2,-0.3],color:'#8a6a3a'}],
+  insect:(p)=>[{g:'sphere',r:0.2,pos:[0,0.25,-0.2],color:col(p,'#4a5a2a')},{g:'sphere',r:0.25,pos:[0,0.25,0.15],color:col(p,'#3a4a22')},{g:'sphere',r:0.16,pos:[0,0.28,0.5],color:'#2a3018'},
+    {g:'cylinder',r:[0.02,0.02,0.3],pos:[0.2,0.2,0],rot:[0,0,1],color:'#222'},{g:'cylinder',r:[0.02,0.02,0.3],pos:[-0.2,0.2,0],rot:[0,0,-1],color:'#222'}],
+  monster:(p)=>[{g:'sphere',r:0.5,pos:[0,0.55,0],color:col(p,'#7a3aa0'),scale:[1,1.1,1]},{g:'cone',r:0.12,h:0.3,pos:[0.25,1.1,0],color:'#5a2a80'},{g:'cone',r:0.12,h:0.3,pos:[-0.25,1.1,0],color:'#5a2a80'},
+    {g:'sphere',r:0.1,pos:[0.18,0.7,0.42],color:'#ff5'},{g:'sphere',r:0.1,pos:[-0.18,0.7,0.42],color:'#ff5'}],
+  ghost:(p)=>[{g:'sphere',r:0.4,pos:[0,0.7,0],color:col(p,'#e8eefc'),gloss:0.5},{g:'cylinder',r:[0.4,0.28,0.6],pos:[0,0.3,0],color:col(p,'#e8eefc'),gloss:0.5},
+    {g:'sphere',r:0.08,pos:[0.15,0.75,0.34],color:'#334'},{g:'sphere',r:0.08,pos:[-0.15,0.75,0.34],color:'#334'}],
+  zombie:(p)=>{ const a=B.person(Object.assign({top:'#5a7a3a',bottom:'#3a4a2a',skin:'#9ab86a'},p)); return a; },
+  sea:(p)=>[{g:'sphere',r:0.4,pos:[0,0.5,0],color:col(p,'#3aa0c0'),scale:[1.5,0.9,1]},{g:'cone',r:0.3,h:0.5,pos:[0,0.5,-0.6],rot:[1.57,0,0],color:col(p,'#3aa0c0')},{g:'box',size:[0.05,0.4,0.4],pos:[0,0.8,0.1],color:'#2a90b0'},
+    {g:'sphere',r:0.06,pos:[0.22,0.55,0.45],color:'#fff'}],
+  alien:(p)=>{ const a=B.person(Object.assign({headSize:1.7,skin:'#8ad0a0',top:'#6a4aa0'},p)); a.push({g:'cylinder',r:[0.015,0.015,0.3],pos:[0,1.9,0],color:'#8ad0a0'},{g:'sphere',r:0.05,pos:[0,2.05,0],color:'#ff6'}); return a; }
+};
+
+/* ===================== 팔레트 정의 ===================== */
+// kind: 'building'→role:prop / 'creature'→role:monster.  free=텍스트로 이름 지정.
+const PALETTE_BUILD = [
+  ['freeBuild','자유건물',true],['wall','벽'],['floor','바닥'],['house','집'],['pillar','기둥'],['statue','석상'],
+  ['building','빌딩'],['car','차'],['plane','비행기'],['bicycle','자전거'],['streetlight','가로등'],
+  ['chair','의자'],['desk','책상'],['furniture','가구'],['appliance','가전제품'],['food','음식'],['drink','음료'],
+  ['__spawner','구멍(목표)'] // 게임 클리어용 구멍
+];
+const PALETTE_CREATURE = [
+  ['freeCreature','자유',true],['person','사람'],['animal','동물'],['insect','곤충'],['monster','괴물'],
+  ['ghost','유령'],['zombie','좀비'],['sea','해양생물'],['alien','외계인']
+];
+
+/* ===================== 에디터 상태 ===================== */
+const MAX_MAPS = 9;
+let curMap = 1;
+let maps = {};            // { 1:{meta, objects:[...]}, ... }  objects = 에디터 오브젝트(아래)
+let armed = null;         // 배치 대기 중인 종류 {type,kind,free}
+let selected = null;      // 선택된 오브젝트
+let pendingImage = null;  // 추가된 이미지(dataURL) — "이런 느낌으로" 대상
+let globalSettings = { shading:'smooth', gloss:0.4, poly:'med' };
+
+function blankMap(n){ return { meta:{ name:'맵 '+n, bound:24, indoor:false, theme:'yard', ground:'#83cf4e', sky:'#a9def7', goal:{type:'size',value:1.6} }, objects:[] }; }
+function M(){ return maps[curMap] || (maps[curMap]=blankMap(curMap)); }
+
+/* ===================== three.js 씬 ===================== */
+const cv=document.getElementById('cv');
+let renderer,scene,camera,sun,hemiL,gridGround;
+let camYaw=0.6, camPitch=0.9, camDist=22, camTarget=new THREE.Vector3(0,0,0);
+function initThree(){
+  renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+  renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+  renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  renderer.setClearColor(0x1a1f2a,1);
+  scene=new THREE.Scene();
+  camera=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,0.1,800);
+  hemiL=new THREE.HemisphereLight(0xffffff,0x88a070,0.7); scene.add(hemiL);
+  sun=new THREE.DirectionalLight(0xfff2d6,0.7); sun.position.set(20,40,16); sun.castShadow=true;
+  sun.shadow.mapSize.set(2048,2048); sun.shadow.camera.near=1; sun.shadow.camera.far=120;
+  sun.shadow.camera.left=-40;sun.shadow.camera.right=40;sun.shadow.camera.top=40;sun.shadow.camera.bottom=-40;
+  scene.add(sun); scene.add(sun.target);
+  rebuildGround();
+  resize(); updateCam();
+}
+function rebuildGround(){
+  if(gridGround) scene.remove(gridGround);
+  gridGround=new THREE.Group();
+  const meta=M().meta, H=meta.bound;
+  const g=new THREE.Mesh(new THREE.CircleGeometry(H+4,48), new THREE.MeshPhongMaterial({color:_hex(meta.indoor?meta.floor:meta.ground,0x83cf4e),shininess:6}));
+  g.rotation.x=-Math.PI/2; g.receiveShadow=true; gridGround.add(g);
+  const grid=new THREE.GridHelper(H*2,Math.round(H), 0xffffff, 0x000000); grid.material.opacity=0.12; grid.material.transparent=true; grid.position.y=0.02; gridGround.add(grid);
+  scene.add(gridGround);
+  scene.background = new THREE.Color(_hex(meta.indoor?0x222730:meta.sky,0x1a1f2a));
+}
+function updateCam(){
+  const x=camTarget.x+Math.sin(camYaw)*Math.cos(camPitch)*camDist;
+  const y=camTarget.y+Math.sin(camPitch)*camDist;
+  const z=camTarget.z+Math.cos(camYaw)*Math.cos(camPitch)*camDist;
+  camera.position.set(x,y,z); camera.lookAt(camTarget);
+}
+function resize(){ renderer.setSize(innerWidth,innerHeight,false); camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); }
+addEventListener('resize',resize);
+
+/* ===================== 오브젝트 생성/갱신 ===================== */
+// 에디터 오브젝트: { id,type,kind,name,x,z,rotY,scale,color,params,role,_parts,_mesh,_sel, shading,gloss }
+let _idc=1;
+function makeObject(type,kind,free){
+  const o={ id:'o'+(_idc++), type, kind, free:!!free, name:'', x:0,z:0, rotY:0, scale:1, color:null, params:{}, role:(type==='__spawner'?'spawner':(kind==='creature'?'monster':'prop')) };
+  return o;
+}
+function buildParts(o){
+  if(o.role==='spawner') return [];
+  if(o._customParts) return o._customParts;  // 외부모델/자유 고정 파츠
+  const fn = B[o.type]; const p=Object.assign({color:o.color}, o.params);
+  return fn ? fn(p) : B.freeBuild(p);
+}
+function rebuildMesh(o){
+  if(o._mesh){ scene.remove(o._mesh); o._mesh=null; }
+  if(o.role==='spawner'){
+    const g=new THREE.Group(); const r=(o.scale||1)*0.9;
+    const rim=new THREE.Mesh(new THREE.RingGeometry(r*0.85,r*1.05,36),new THREE.MeshBasicMaterial({color:0x9a5ce0,side:THREE.DoubleSide})); rim.rotation.x=-Math.PI/2; rim.position.y=0.03; g.add(rim);
+    const disk=new THREE.Mesh(new THREE.CircleGeometry(r*0.9,30),new THREE.MeshBasicMaterial({color:0x120a1a})); disk.rotation.x=-Math.PI/2; disk.position.y=0.02; g.add(disk);
+    g.position.set(o.x,0,o.z); o._mesh=g; scene.add(g); return;
+  }
+  o._parts = buildParts(o);
+  const g=new THREE.Group();
+  for(const pt of o._parts){ try{ g.add(buildPart(applyObjShading(o,pt))); }catch(e){} }
+  // 접지
+  const box=new THREE.Box3().setFromObject(g);
+  if(isFinite(box.min.y)) for(const c of g.children) c.position.y += -box.min.y;
+  g.scale.setScalar(o.scale||1); g.position.set(o.x,0,o.z); g.rotation.y=o.rotY||0;
+  o._mesh=g; scene.add(g);
+  if(o===selected) addSelRing(o);
+}
+function applyObjShading(o,pt){ // 오브젝트별 셰이딩/광택 오버라이드 반영
+  const q=Object.assign({},pt);
+  if(o.shading) q.shading=o.shading;
+  if(o.gloss!=null && q.gloss==null) q.gloss=o.gloss;
+  return q;
+}
+let _selRing=null;
+function addSelRing(o){
+  if(_selRing){ scene.remove(_selRing); _selRing=null; }
+  if(!o||!o._mesh) return;
+  const box=new THREE.Box3().setFromObject(o._mesh); const r=Math.max(0.6,(box.max.x-box.min.x+box.max.z-box.min.z)*0.35);
+  _selRing=new THREE.Mesh(new THREE.RingGeometry(r,r*1.12,40),new THREE.MeshBasicMaterial({color:0x8b7fe0,side:THREE.DoubleSide,transparent:true,opacity:0.9}));
+  _selRing.rotation.x=-Math.PI/2; _selRing.position.set(o.x,0.05,o.z); scene.add(_selRing);
+}
+function rebuildAll(){
+  for(const o of M().objects){ rebuildMesh(o); }
+  rebuildGround();
+}
+function clearScene(){
+  for(const o of (maps[curMap]?maps[curMap].objects:[])){ if(o._mesh){ scene.remove(o._mesh); o._mesh=null; } }
+  if(_selRing){ scene.remove(_selRing); _selRing=null; }
+}
+
+/* ===================== 배치 / 선택 (레이캐스트) ===================== */
+const ray=new THREE.Raycaster(), ndc=new THREE.Vector2(), groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+function screenToGround(cx,cy){ ndc.x=(cx/innerWidth)*2-1; ndc.y=-(cy/innerHeight)*2+1; ray.setFromCamera(ndc,camera); const pt=new THREE.Vector3(); ray.ray.intersectPlane(groundPlane,pt); return pt; }
+function pickObject(cx,cy){ ndc.x=(cx/innerWidth)*2-1; ndc.y=-(cy/innerHeight)*2+1; ray.setFromCamera(ndc,camera);
+  const meshes=[]; for(const o of M().objects){ if(o._mesh) o._mesh.traverse(m=>{ if(m.isMesh){ m.userData._owner=o; meshes.push(m); } }); }
+  const hit=ray.intersectObjects(meshes,false); return hit.length?hit[0].object.userData._owner:null; }
+
+function place(type,kind,free,x,z){
+  const o=makeObject(type,kind,free); o.x=x; o.z=z;
+  if(free){ const nm=prompt('이름/설명을 입력하세요 (예: 빨간 우체통):',''); if(nm){ o.name=nm; applyCommand(o,nm,true); } }
+  M().objects.push(o); rebuildMesh(o); select(o);
+  if(o.role==='spawner') toast('구멍 배치 — 게임에서 "모두 메우기" 목표가 됩니다');
+}
+function select(o){
+  selected=o; addSelRing(o);
+  if(o){ document.getElementById('selInfo').innerHTML = '선택: <b>'+(o.name||labelOf(o.type))+'</b> · 크기 '+(o.scale||1).toFixed(2)+' · '+(o.color?('색 '+o.color):'기본색')+' — 채팅으로 수정'; refreshSettingsScope(); }
+  else { document.getElementById('selInfo').textContent='선택된 오브젝트 없음 — 팔레트에서 종류를 고르세요'; refreshSettingsScope(); }
+}
+function labelOf(type){ const all=PALETTE_BUILD.concat(PALETTE_CREATURE).find(x=>x[0]===type); return all?all[1]:type; }
+function deleteSelected(){ if(!selected)return; const a=M().objects; const i=a.indexOf(selected); if(i>=0)a.splice(i,1); if(selected._mesh)scene.remove(selected._mesh); if(_selRing){scene.remove(_selRing);_selRing=null;} select(null); }
+
+/* ===================== 채팅 키워드 해석기 (오프라인) =====================
+   인식: 색상 / 크기 / 회전 / 키·머리·체형 / 의상·성별 프리셋.
+   [확장] 단어/프리셋을 여기에 계속 추가하세요. */
+const COLORS={ '빨':'#cc3333','red':'#cc3333','파':'#3a6ad0','blue':'#3a6ad0','노':'#e8c14a','yellow':'#e8c14a',
+  '초':'#3fa05a','녹':'#3fa05a','green':'#3fa05a','검':'#222222','black':'#222222','흰':'#eeeeee','하':'#eeeeee','white':'#eeeeee',
+  '보라':'#8a4fd0','purple':'#8a4fd0','주황':'#e07a2a','orange':'#e07a2a','분홍':'#e87aa8','핑':'#e87aa8','pink':'#e87aa8',
+  '회':'#888888','gray':'#888888','갈':'#7a5a3a','brown':'#7a5a3a' };
+function findColor(t){ for(const k in COLORS){ if(t.includes(k)) return COLORS[k]; } return null; }
+// returns true if something applied
+function applyCommand(o,text,silent){
+  if(!o) return false;
+  const t=text.toLowerCase(); let hit=false;
+  // 외부 모델 제약
+  if(o._external){
+    let lim=false;
+    const c=findColor(text); if(c){ o.color=c; tintExternal(o,c); hit=true; }
+    if(/크게|커|2배|두배|거대/.test(t)){ o.scale=(o.scale||1)*(/2배|두배/.test(t)?2:1.4); hit=true; }
+    if(/작게|작|절반|미니/.test(t)){ o.scale=(o.scale||1)*(/절반/.test(t)?0.5:0.7); hit=true; }
+    const deg=t.match(/(-?\d+)\s*도/); if(deg){ o.rotY=(o.rotY||0)+(+deg[1])*Math.PI/180; hit=true; }
+    else if(/회전|돌려|왼쪽|오른쪽/.test(t)){ o.rotY=(o.rotY||0)+Math.PI/2; hit=true; }
+    if(o._mesh){ o._mesh.scale.setScalar(o.scale||1); o._mesh.rotation.y=o.rotY||0; }
+    if(/모양|형태|머리|키|체형|얼굴/.test(t)) lim=true;
+    if(lim && !silent) toast('⚠️ 외부 모델은 형태(모양) 변경에 제약이 있어요. 색·크기·회전만 가능합니다.');
+    if(!hit && !silent) toast('인식 못한 명령이에요. 외부 모델은 "색/크기/회전"만 됩니다.');
+    return hit;
+  }
+  // 색
+  const c=findColor(text); if(c){ o.color=c; hit=true; }
+  // 크기
+  const mul=t.match(/([\d.]+)\s*배/); if(mul){ o.scale=(+mul[1])||1; hit=true; }
+  else { if(/크게|크다|커|거대|크고/.test(t)){ o.scale=(o.scale||1)*1.4; hit=true; } if(/작게|작은|작게|작고|미니|줄여/.test(t)){ o.scale=(o.scale||1)*0.7; hit=true; } if(/절반/.test(t)){ o.scale=(o.scale||1)*0.5; hit=true; } }
+  // 회전
+  const deg=t.match(/(-?\d+)\s*도/); if(deg){ o.rotY=(o.rotY||0)+(+deg[1])*Math.PI/180; hit=true; }
+  else if(/회전|돌려|왼쪽으로|오른쪽으로|돌려라/.test(t)){ o.rotY=(o.rotY||0)+Math.PI/2; hit=true; }
+  // 사람/생명체 파라미터
+  const P=o.params;
+  if(/키\s*크|장신|키가\s*큰|키크|키 크/.test(t)){ P.height=(P.height||1)*1.35; hit=true; }
+  if(/키\s*작|단신|키가\s*작/.test(t)){ P.height=(P.height||1)*0.75; hit=true; }
+  if(/머리\s*크|대두|머리가\s*큰|머리 큰|머리크/.test(t)){ P.headSize=(P.headSize||1)*1.5; hit=true; }
+  if(/머리\s*작/.test(t)){ P.headSize=(P.headSize||1)*0.7; hit=true; }
+  if(/뚱뚱|통통|살찐/.test(t)){ P.girth=(P.girth||1)*1.4; hit=true; }
+  if(/날씬|마른|홀쭉/.test(t)){ P.girth=(P.girth||1)*0.7; hit=true; }
+  if(/여자|여성|소녀|여학생|여고생|그녀/.test(t)){ P.hair='#3a2a1a'; if(!c) P.skin='#f3d0b0'; hit=true; }
+  if(/남자|남성|소년|남학생/.test(t)){ hit=true; }
+  // 의상 프리셋
+  if(/교복|여고생/.test(t)){ P.top='#2a3550'; P.bottom='#1a2238'; if(c){P.top=c;} hit=true; }
+  if(/빨간\s*옷|빨간\s*의상|빨간\s*드레스/.test(t)){ P.top='#cc3333'; o.color=null; hit=true; }
+  if(c && (o.type==='person'||o.type==='zombie'||o.type==='alien')){ P.top=c; hit=true; } // 사람류는 색=옷색
+  rebuildMesh(o); if(o===selected) select(o);
+  if(!hit && !silent) toast('🤔 "'+text+'" 은(는) 아직 못 알아들어요. 예: 빨간색 / 2배 크게 / 90도 회전 / 키 크게 / 머리 크게 / 교복');
+  return hit;
+}
+
+/* ===================== 이미지 / 외부모델 ===================== */
+function tintExternal(o,c){ if(o._mesh) o._mesh.traverse(m=>{ if(m.isMesh&&m.material&&m.material.color) m.material.color.set(c); }); }
+function avgColorFromImage(img){ const c=document.createElement('canvas'); c.width=c.height=16; const x=c.getContext('2d'); x.drawImage(img,0,0,16,16); const d=x.getImageData(0,0,16,16).data; let r=0,g=0,b=0,n=0; for(let i=0;i<d.length;i+=4){ r+=d[i];g+=d[i+1];b+=d[i+2];n++; } return '#'+[r,g,b].map(v=>('0'+Math.round(v/n).toString(16)).slice(-2)).join(''); }
+
+/* ===================== 자동 생성 (오프라인 키워드) =====================
+   문장에서 테마 + "집 5개", "나무 10그루" 식 수량을 뽑아 배치. [확장] 규칙 추가. */
+function autoGenerate(text){
+  const t=text.toLowerCase();
+  const meta=M().meta;
+  if(/도시|시내|거리/.test(t)){ meta.theme='city'; meta.indoor=false; meta.ground='#8a8f96'; }
+  else if(/방|실내|집안/.test(t)){ meta.theme='room'; meta.indoor=true; }
+  else if(/공동묘지|무덤|저승|할로윈/.test(t)){ meta.theme='grave'; meta.indoor=false; meta.ground='#3a4a3f'; }
+  else if(/숲|정원|마당|들판/.test(t)){ meta.theme='yard'; meta.indoor=false; meta.ground='#83cf4e'; }
+  // 수량 파싱: "<종류> <수>개/그루/대/마리"
+  const NAMEMAP={ '집':'house','빌딩':'building','나무':'streetlight','차':'car','자동차':'car','의자':'chair','책상':'desk','기둥':'pillar','석상':'statue','가로등':'streetlight',
+    '사람':'person','좀비':'zombie','유령':'ghost','괴물':'monster','동물':'animal','외계인':'alien' };
+  let placed=0;
+  const H=meta.bound-3;
+  const rx=/([가-힣]+)\s*(\d+)\s*(개|그루|대|마리|명)?/g; let m2;
+  while((m2=rx.exec(text))){ const key=NAMEMAP[m2[1]]; const n=Math.min(40,+m2[2]); if(!key)continue;
+    const kind=(['person','zombie','ghost','monster','animal','alien'].includes(key))?'creature':'building';
+    for(let i=0;i<n;i++){ const o=makeObject(key,kind,false); o.x=rand(-H,H); o.z=rand(-H,H); M().objects.push(o); rebuildMesh(o); placed++; }
+  }
+  // 색/분위기 키워드도 일부 반영
+  rebuildGround();
+  if(placed) toast('🪄 자동 생성: '+placed+'개 배치 + 테마='+meta.theme);
+  else toast('수량을 못 찾았어요. 예: "도시에 빌딩 8개, 차 5대, 좀비 6마리"');
+  updateMapName();
+}
+function rand(a,b){return a+Math.random()*(b-a);}
+
+/* ===================== 저장 / 불러오기 / 내보내기 ===================== */
+function serializeObject(o){
+  const out={ role:o.role, x:round(o.x), z:round(o.z), rotY:round(o.rotY||0), scale:round(o.scale||1) };
+  if(o.name) out.name=o.name;
+  if(o.color) out.color=o.color;
+  if(o.role==='spawner'){ out.r=round((o.scale||1)*0.9); return out; }
+  out.parts = (o._external||o.free)&&o._customParts ? o._customParts : buildPartsExport(o);
+  if(o.shading) out.parts.forEach(p=>{ if(p.shading==null)p.shading=o.shading; });
+  return out;
+}
+function buildPartsExport(o){ // 색을 hex 문자열로 정규화
+  const parts=buildParts(o).map(p=>{ const q=Object.assign({},p); if(typeof q.color==='number')q.color=_toHexStr(q.color); return q; });
+  return parts;
+}
+function round(v){ return Math.round(v*1000)/1000; }
+function exportMap(){
+  const meta=M().meta;
+  const spec={ format:'hole-map', version:1, name:meta.name, bound:meta.bound, indoor:meta.indoor, theme:meta.theme,
+    ground:meta.ground, sky:meta.sky, floor:meta.floor, wall:meta.wall, goal:meta.goal,
+    objects: M().objects.map(serializeObject) };
+  return spec;
+}
+function download(filename,text){ const a=document.createElement('a'); a.href='data:application/json;charset=utf-8,'+encodeURIComponent(text); a.download=filename; a.click(); }
+function saveLocal(){ try{ localStorage.setItem('holeEditor', JSON.stringify(persist())); toast('💾 브라우저에 저장됨 (맵 '+Object.keys(maps).length+'개)'); }catch(e){ toast('저장 실패: '+e.message); } }
+function persist(){ const data={cur:curMap,maps:{}}; for(const k in maps){ data.maps[k]={meta:maps[k].meta, objects:maps[k].objects.map(stripObj)}; } return data; }
+function stripObj(o){ const c=Object.assign({},o); delete c._mesh; delete c._parts; delete c._sel; return c; }
+function restore(data){ maps={}; for(const k in data.maps){ maps[k]={meta:data.maps[k].meta, objects:data.maps[k].objects.map(o=>{ o._mesh=null; return o; })}; } curMap=data.cur||1; }
+function loadLocal(){ try{ const s=localStorage.getItem('holeEditor'); if(!s){ toast('저장된 데이터가 없어요'); return; } clearScene(); restore(JSON.parse(s)); rebuildAll(); select(null); updateMapName(); toast('📂 불러옴'); }catch(e){ toast('불러오기 실패: '+e.message); } }
+
+/* ===================== 미리보기 (iframe + postMessage) ===================== */
+function openPreview(){
+  const spec=exportMap();
+  const wrap=document.getElementById('pvWrap'); const fr=document.getElementById('pvFrame');
+  wrap.classList.add('show');
+  if(fr.src.indexOf(PREVIEW_URL)<0){ fr.src=PREVIEW_URL; fr.onload=()=>fr.contentWindow.postMessage({type:'holePreview',map:spec},'*'); }
+  else fr.contentWindow.postMessage({type:'holePreview',map:spec},'*');
+}
+
+/* ===================== UI 빌드 / 이벤트 ===================== */
+function buildPalette(){
+  const gb=document.getElementById('grpBuild'), gc=document.getElementById('grpCreature');
+  for(const [type,label,free] of PALETTE_BUILD){ gb.appendChild(palBtn(type,label,'building',free)); }
+  for(const [type,label,free] of PALETTE_CREATURE){ gc.appendChild(palBtn(type,label,'creature',free)); }
+}
+function palBtn(type,label,kind,free){
+  const b=document.createElement('button'); b.className='pbtn'+(free?' free':''); b.textContent=(free?'✎ ':'')+label;
+  b.onclick=()=>{ document.querySelectorAll('.pbtn.armed').forEach(x=>x.classList.remove('armed'));
+    if(armed&&armed.type===type){ armed=null; toast('배치 취소'); return; }
+    armed={type,kind,free}; b.classList.add('armed'); toast((free?'자유 ':'')+label+' — 바닥을 클릭해 배치'); };
+  return b;
+}
+function updateMapName(){ document.getElementById('mapName').textContent=(M().meta.name||('맵 '+curMap)); }
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2600); }
+
+// 캔버스 입력: 카메라 회전(빈곳 드래그) / 배치·선택(클릭)
+let down=false,moved=false,lx=0,ly=0,btn=0;
+cv.addEventListener('mousedown',e=>{ down=true;moved=false;lx=e.clientX;ly=e.clientY;btn=e.button; });
+addEventListener('mousemove',e=>{ if(!down)return; const dx=e.clientX-lx, dy=e.clientY-ly; if(Math.abs(dx)+Math.abs(dy)>3)moved=true;
+  if(moved){ camYaw-=dx*0.005; camPitch=Math.max(0.15,Math.min(1.45,camPitch+dy*0.005)); updateCam(); lx=e.clientX;ly=e.clientY; } });
+addEventListener('mouseup',e=>{ if(!down)return; down=false;
+  if(!moved){ onClick(e.clientX,e.clientY); } });
+cv.addEventListener('wheel',e=>{ camDist=Math.max(6,Math.min(80,camDist+(e.deltaY>0?2:-2))); updateCam(); e.preventDefault(); },{passive:false});
+function onClick(cx,cy){
+  if(armed){ const p=screenToGround(cx,cy); if(p){ place(armed.type,armed.kind,armed.free,round(p.x),round(p.z)); } return; }
+  const o=pickObject(cx,cy); select(o||null);
+}
+// 터치(간단)
+cv.addEventListener('touchstart',e=>{ const t=e.touches[0]; down=true;moved=false;lx=t.clientX;ly=t.clientY; },{passive:true});
+cv.addEventListener('touchmove',e=>{ if(!down)return; const t=e.touches[0]; const dx=t.clientX-lx,dy=t.clientY-ly; if(Math.abs(dx)+Math.abs(dy)>4)moved=true; if(moved){ camYaw-=dx*0.006; camPitch=Math.max(0.15,Math.min(1.45,camPitch+dy*0.006)); updateCam(); lx=t.clientX;ly=t.clientY; } },{passive:true});
+cv.addEventListener('touchend',e=>{ if(down&&!moved){ const t=e.changedTouches[0]; onClick(t.clientX,t.clientY); } down=false; });
+
+// 상단바
+document.getElementById('mapPrev').onclick=()=>switchMap(-1);
+document.getElementById('mapNext').onclick=()=>switchMap(1);
+function switchMap(d){ clearScene(); curMap=Math.max(1,Math.min(MAX_MAPS,curMap+d)); M(); rebuildAll(); select(null); updateMapName(); toast('맵 '+curMap); }
+document.getElementById('newBtn').onclick=()=>{ if(!confirm('현재 맵을 비우고 새로 시작할까요?'))return; clearScene(); maps[curMap]=blankMap(curMap); rebuildAll(); select(null); updateMapName(); toast('✨ 새 맵'); };
+document.getElementById('saveBtn').onclick=saveLocal;
+document.getElementById('loadBtn').onclick=()=>{ if(localStorage.getItem('holeEditor')&&confirm('브라우저 저장본을 불러올까요? (취소=파일 선택)')) loadLocal(); else document.getElementById('fileLoad').click(); };
+document.getElementById('exportBtn').onclick=()=>{ const spec=exportMap(); download((M().meta.name||'map')+'.json', JSON.stringify(spec,null,1)); toast('⬇ JSON 내보냄 — 게임 "커스텀 맵 불러오기"로 로드'); };
+document.getElementById('playBtn').onclick=openPreview;
+document.getElementById('pvClose').onclick=()=>document.getElementById('pvWrap').classList.remove('show');
+document.getElementById('autoBtn').onclick=()=>{ const t=prompt('맵 설명을 입력하세요 (예: "도시에 빌딩 8개, 차 5대, 좀비 6마리"):'); if(t) autoGenerate(t); };
+
+// 파일 로드(외부 JSON → 에디터로 역import: parts 기반이라 _customParts로 보존)
+document.getElementById('fileLoad').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>importSpec(r.result); r.readAsText(f); });
+function importSpec(txt){ try{ const spec=JSON.parse(txt); if(spec.format!=='hole-map'){ toast('hole-map JSON이 아니에요'); return; }
+  clearScene(); maps[curMap]={ meta:{name:spec.name||('맵 '+curMap),bound:spec.bound||24,indoor:!!spec.indoor,theme:spec.theme||'yard',ground:spec.ground,sky:spec.sky,floor:spec.floor,wall:spec.wall,goal:spec.goal||{type:'size',value:1.6}}, objects:[] };
+  for(const so of (spec.objects||[])){ const o=makeObject('freeBuild', so.role==='monster'?'creature':'building', true); o.role=so.role||'prop'; o.x=so.x||0; o.z=so.z||0; o.rotY=so.rotY||0; o.scale=so.scale||1; o.color=so.color||null; o.name=so.name||''; if(so.parts){ o._customParts=so.parts; o.free=true; } if(so.role==='spawner'){ o.scale=(so.r||0.8)/0.9; } maps[curMap].objects.push(o); }
+  rebuildAll(); select(null); updateMapName(); toast('📂 맵 불러옴 ('+maps[curMap].objects.length+'개)');
+}catch(e){ toast('불러오기 실패: '+e.message); } }
+
+// 채팅 수정
+function sendChat(){ const v=document.getElementById('chat').value.trim(); if(!v)return; document.getElementById('chat').value='';
+  if(pendingImage){ // "이런 느낌으로" → 평균색 적용
+    if(selected){ const c=pendingImage.avg; selected.color=c; rebuildMesh(selected); select(selected); toast('🖼 이미지 느낌(대표색 '+c+') 적용 — 더 정밀한 변환은 claude.ai 버전에서 확장하세요'); }
+    else toast('이미지 느낌을 적용할 오브젝트를 먼저 선택하세요');
+    pendingImage=null; return;
+  }
+  if(!selected){ toast('먼저 오브젝트를 클릭해 선택하세요'); return; }
+  applyCommand(selected,v);
+}
+document.getElementById('sendBtn').onclick=sendChat;
+document.getElementById('chat').addEventListener('keydown',e=>{ if(e.key==='Enter')sendChat(); });
+addEventListener('keydown',e=>{ if(e.key==='Delete'||e.key==='Backspace'){ if(document.activeElement.id!=='chat'){ deleteSelected(); } } if(e.key==='Escape'){ armed=null; document.querySelectorAll('.pbtn.armed').forEach(x=>x.classList.remove('armed')); select(null); } });
+
+// 이미지 / 외부모델
+document.getElementById('imgBtn').onclick=()=>document.getElementById('fileImg').click();
+document.getElementById('fileImg').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f)return; const img=new Image(); img.onload=()=>{ pendingImage={avg:avgColorFromImage(img)}; toast('🖼 이미지 추가됨 — 오브젝트 선택 후 채팅에 "이런 느낌으로" 입력'); }; img.src=URL.createObjectURL(f); });
+document.getElementById('extBtn').onclick=()=>{ toast('📦 외부 GLB/GLTF — 이 시작코드에선 자리표시. claude.ai 버전에서 THREE.GLTFLoader로 로드하세요. 외부 모델은 색/크기/회전만 수정 가능.'); /* [확장] GLTFLoader */ };
+
+// 설정 패널
+document.getElementById('leftBtn').onclick=()=>document.getElementById('settings').classList.toggle('show');
+document.querySelectorAll('#settings .seg').forEach(seg=>{ seg.querySelectorAll('button').forEach(b=>{ b.onclick=()=>{ seg.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); applySetting(seg.dataset.key,b.dataset.v); }; }); });
+document.getElementById('glossR').oninput=e=>{ document.getElementById('glossVal').textContent=(+e.target.value).toFixed(2); applySetting('gloss',+e.target.value); };
+document.getElementById('applyAll').onclick=()=>{ for(const o of M().objects){ o.shading=globalSettings.shading; o.gloss=globalSettings.gloss; rebuildMesh(o); } toast('전체 적용됨'); };
+function applySetting(key,val){
+  if(selected){ // 선택 오브젝트만
+    if(key==='shading') selected.shading=val;
+    if(key==='gloss') selected.gloss=val;
+    if(key==='poly'){ toast('폴리곤은 전역 설정입니다(개별 미지원)'); }
+    rebuildMesh(selected); select(selected);
+  } else { // 전체/전역
+    globalSettings[key]=val;
+    if(key==='shading'){ SMOOTH=(val==='smooth'); }
+    if(key==='poly'){ POLY_MUL=(val==='low'?0.6:val==='high'?1.6:1.0); rebuildAll(); }
+    if(key==='gloss'){ globalSettings.gloss=val; }
+  }
+}
+function refreshSettingsScope(){ document.getElementById('scopeNote').innerHTML = '대상: <b>'+(selected?('선택된 오브젝트'):'전체')+'</b>'+(selected?'':' (오브젝트 선택 시 그 오브젝트만)'); }
+
+/* ===================== 부팅 ===================== */
+function loop(){ requestAnimationFrame(loop);
+  // 살짝 자동 회전하는 선택 링/유령 등은 생략(정적 에디터). 필요시 여기에 애니메이션.
+  renderer.render(scene,camera);
+}
+initThree(); buildPalette(); M(); rebuildAll(); updateMapName(); updateCam();
+requestAnimationFrame(loop);
+// 시작 안내
+setTimeout(()=>toast('우측에서 종류 선택 → 바닥 클릭 배치 · 오브젝트 클릭 후 채팅으로 수정'),500);
+
+// 디버그/검증 훅
+window.__ED={ get objects(){return M().objects.length;}, export:exportMap, place:(t,k,f,x,z)=>place(t,k,f||false,x||0,z||0), cmd:(s)=>selected&&applyCommand(selected,s), select:(i)=>select(M().objects[i]) };
+})();
+</script>
+</body>
+</html>
