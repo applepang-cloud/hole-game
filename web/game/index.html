@@ -3159,7 +3159,7 @@ function resumeGame(){ if(ended) return; document.getElementById('pauseVeil').cl
 document.getElementById('pauseBtn').addEventListener('click', pauseGame);
 document.getElementById('pResume').addEventListener('click', resumeGame);
 document.getElementById('pAgain').addEventListener('click', function(){ document.getElementById('pauseVeil').classList.add('hidden'); beginRound(curRound()); });
-document.getElementById('pHome').addEventListener('click', function(){ document.getElementById('pauseVeil').classList.add('hidden'); running=false; showMenu(); });
+document.getElementById('pHome').addEventListener('click', function(){ document.getElementById('pauseVeil').classList.add('hidden'); running=false; if(window.__HOLE_EMBEDDED){ try{ EMIT({type:'home'}); }catch(e){} } else { showMenu(); } });
 document.getElementById('eventToggle').addEventListener('click', function(){
   document.getElementById('eventModes').classList.toggle('hidden');
 });

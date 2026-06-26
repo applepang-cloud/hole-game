@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'asset_server.dart';
 import 'bridge_stub.dart' as bridge;
 
@@ -31,8 +32,15 @@ class _GameWebViewState extends State<GameWebView> {
 
   Future<void> _init() async {
     await AssetServer.start();
+    // Android: 미디어(WebAudio/오디오) 자동재생에 사용자 제스처 요구 해제 → 배경음악 재생
+    final params = const PlatformWebViewControllerCreationParams();
     late final WebViewController ctrl;
-    ctrl = WebViewController()
+    ctrl = WebViewController.fromPlatformCreationParams(params);
+    final platform = ctrl.platform;
+    if (platform is AndroidWebViewController) {
+      platform.setMediaPlaybackRequiresUserGesture(false);
+    }
+    ctrl
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..addJavaScriptChannel(
         'HoleGame',

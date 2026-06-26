@@ -368,24 +368,27 @@ class _HomeScreenState extends State<HomeScreen> {
         )),
       );
     } else if (_playing) {
-      // 인게임: 배경 투명(뒤의 게임 iframe이 비침) + HUD 오버레이(입력·토글·일시정지)
-      content = _HudOverlay(
-        key: const ValueKey('hud'),
-        state: _state,
-        stage: _stage,
-        music: _music,
-        sound: _sound,
-        gyro: _gyro,
-        paused: _paused,
-        onInput: (x, y) => holeInput(x, y),
-        onToggle: (what) => holeToggle(what),
-        onPause: _pause,
-        onResume: _resume,
-        onRestart: _again,
-        onHome: _toHome,
-        sensitivity: _sensitivity,
-        onSensitivity: (v) { setState(() => _sensitivity = v); holeSetSensitivity(v); },
-      );
+      // 인게임 HUD: 웹은 Flutter HUD 오버레이(iframe 위), Android는 게임 자체 DOM HUD를
+      // 그대로 사용(네이티브 터치) → Flutter 오버레이는 빈 위젯(이중 표시 방지)
+      content = kIsWeb
+          ? _HudOverlay(
+              key: const ValueKey('hud'),
+              state: _state,
+              stage: _stage,
+              music: _music,
+              sound: _sound,
+              gyro: _gyro,
+              paused: _paused,
+              onInput: (x, y) => holeInput(x, y),
+              onToggle: (what) => holeToggle(what),
+              onPause: _pause,
+              onResume: _resume,
+              onRestart: _again,
+              onHome: _toHome,
+              sensitivity: _sensitivity,
+              onSensitivity: (v) { setState(() => _sensitivity = v); holeSetSensitivity(v); },
+            )
+          : const SizedBox.shrink(key: ValueKey('hud-native'));
     } else if (_screen == 'story') {
       content = KeyedSubtree(
         key: const ValueKey('story'),
