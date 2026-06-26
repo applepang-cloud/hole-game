@@ -381,9 +381,17 @@ function buildSky(){
 }
 
 /* ===================== 환경(땅·하늘·배경) ===================== */
-const MAT = (c, flat=true)=> new THREE.MeshPhongMaterial({ color:c, flatShading:flat, shininess: flat?6:0, specular:0x1a1a14 });
+// v2.1: SMOOTH=true → 각진 flatShading 대신 매끈 셰이딩+광택(고폴리곤 체감↑). false면 v2 각진 룩.
+const SMOOTH = true;
+// 인라인 flatShading:true(몬스터·소품·눈사람 등 12+곳, 런타임 생성 포함)까지 전역 매끈화.
+if (SMOOTH) { (function(){
+  const O = THREE.MeshPhongMaterial;
+  const W = function(p){ if(p && p.flatShading) p.flatShading = false; return new O(p); };
+  W.prototype = O.prototype; THREE.MeshPhongMaterial = W;
+})(); }
+const MAT = (c, flat=true)=> new THREE.MeshPhongMaterial({ color:c, flatShading: SMOOTH?false:flat, shininess: SMOOTH?20:(flat?6:0), specular: SMOOTH?0x2e2e26:0x1a1a14 });
 // 부드러운(매끈) 셰이딩 — 유기체(몬스터)용
-const SMAT = (c, shin=22, spec=0x333333)=> new THREE.MeshPhongMaterial({ color:c, flatShading:false, shininess:shin, specular:spec });
+const SMAT = (c, shin=22, spec=0x333333)=> new THREE.MeshPhongMaterial({ color:c, flatShading:false, shininess: SMOOTH?Math.max(shin,34):shin, specular:spec });
 // 발광(눈/불빛) — emissive로 어두운 곳에서도 빛남
 const GLOW = (c)=> new THREE.MeshPhongMaterial({ color:c, emissive:c, emissiveIntensity:0.9, shininess:40 });
 // 눈알: 흰자 + 검은 눈동자 + 작은 하이라이트. glow면 발광 눈동자
@@ -476,8 +484,8 @@ function buildEnvironment(){
 /* ===================== 공 & 왕자 ===================== */
 function buildBall(){
   ballGroup = new THREE.Group();
-  core = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 2), 
-    new THREE.MeshPhongMaterial({ color:0x9a8350, flatShading:true, shininess:14, specular:0x2a2418 }));
+  core = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 2),
+    new THREE.MeshPhongMaterial({ color:0x9a8350, flatShading:!SMOOTH, shininess: SMOOTH?42:14, specular: SMOOTH?0x6a5a3a:0x2a2418 }));
   core.castShadow = true;
   ballGroup.add(core);
   // 끈끈한 별 무늬 몇 개
@@ -586,7 +594,7 @@ function buildRoom(){
 function buildBlueBall(){
   blueBall = new THREE.Group();
   blueCore = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 2),
-    new THREE.MeshPhongMaterial({ color:0x3f86e0, flatShading:true, shininess:48, specular:0x9fd0ff }));
+    new THREE.MeshPhongMaterial({ color:0x3f86e0, flatShading:!SMOOTH, shininess: SMOOTH?85:48, specular:0xcfe6ff }));
   blueCore.castShadow = true; blueBall.add(blueCore);
   // 퇴마 이벤트2 마법진 링 3개 + 룬 점 (EX_MAP>0 일 때만 visible)
   const exDecor = new THREE.Group();
